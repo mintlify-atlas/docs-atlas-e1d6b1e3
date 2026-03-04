@@ -1,97 +1,209 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: AI YouTube Shorts Generator
+description: Transform long-form videos into engaging vertical shorts automatically with AI-powered highlight selection and smart cropping
 ---
 
-## Setting up
+<div className="relative overflow-hidden bg-[#0a0a0a] dark:bg-[#0a0a0a]">
+  <div className="absolute inset-0 bg-gradient-to-br from-[#87c7df]/10 via-transparent to-[#9b4dff]/10"></div>
+  <div className="relative mx-auto max-w-7xl px-6 py-20 lg:py-24">
+    <div className="mx-auto max-w-3xl text-center">
+      <h1 className="text-4xl font-bold tracking-tight text-white sm:text-5xl md:text-6xl">
+        AI YouTube Shorts Generator
+      </h1>
+      <p className="mt-6 text-lg text-gray-300 dark:text-gray-300 max-w-2xl mx-auto">
+        Automatically extract the most engaging moments from long videos and transform them into viral-ready YouTube Shorts with AI-powered highlight selection, smart cropping, and auto-generated subtitles.
+      </p>
+      <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4 flex-wrap">
+        <a
+          href="/quickstart"
+          className="inline-flex items-center justify-center px-8 py-3 text-base font-semibold text-[#d3d3d3] rounded-lg transition-all duration-200"
+          style={{ background: 'linear-gradient(90deg, #6a5af9 0%, #d35ca6 100%)' }}
+        >
+          Get Started
+        </a>
+        <a
+          href="/installation"
+          className="inline-flex items-center justify-center px-8 py-3 text-base font-semibold text-white bg-transparent border border-white/30 rounded-lg hover:bg-white/10 transition-colors"
+        >
+          View Installation
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
 
-Get your documentation site up and running in minutes.
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Quick Start</h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Get your first AI-generated short in minutes
+  </p>
+  
+  <Steps>
+    <Step title="Clone and setup">
+      Clone the repository and install dependencies:
+      
+      ```bash
+      git clone https://github.com/SamurAIGPT/AI-Youtube-Shorts-Generator.git
+      cd AI-Youtube-Shorts-Generator
+      python3.10 -m venv venv
+      source venv/bin/activate
+      pip install -r requirements.txt
+      ```
+    </Step>
+    
+    <Step title="Configure OpenAI API">
+      Create a `.env` file with your OpenAI API key:
+      
+      ```bash
+      OPENAI_API=your_openai_api_key_here
+      ```
+      
+      <Note>You'll need an OpenAI API key for GPT-4o-mini to analyze and select highlights.</Note>
+    </Step>
+    
+    <Step title="Run the generator">
+      Process a video with a simple command:
+      
+      ```bash
+      ./run.sh "https://youtu.be/VIDEO_ID"
+      ```
+      
+      The tool will automatically:
+      - Download and transcribe the video
+      - Use AI to select the most engaging 2-minute segment
+      - Crop to vertical 9:16 format with smart face tracking
+      - Add stylized subtitles
+      - Output a ready-to-upload short
+    </Step>
+    
+    <Step title="Review and approve">
+      You'll see an interactive prompt to approve or regenerate the AI's selection:
+      
+      ```
+      SELECTED SEGMENT: 68s - 187s (119s duration)
+      Options:
+        [Enter/y] Approve and continue
+        [r] Regenerate selection
+        [n] Cancel
+      Auto-approving in 15 seconds...
+      ```
+      
+      <Tip>Use `--auto-approve` flag for batch processing to skip manual approval.</Tip>
+    </Step>
+  </Steps>
+</div>
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Explore Features</h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Discover what makes this tool powerful for content creators
+  </p>
+  
+  <CardGroup cols={2}>
+    <Card title="AI Highlight Selection" icon="brain" href="/features/ai-highlight-selection">
+      GPT-4o-mini automatically finds the most engaging, surprising, or thought-provoking segments from your videos.
+    </Card>
+    <Card title="Smart Cropping" icon="crop" href="/features/smart-cropping">
+      Face-centered static crops for talking heads or motion-tracked crops for screen recordings — automatically detected.
+    </Card>
+    <Card title="Auto Subtitles" icon="closed-captioning" href="/features/subtitles">
+      Stylized captions with custom fonts and colors burned directly into your video.
+    </Card>
+    <Card title="GPU Transcription" icon="microchip" href="/features/transcription">
+      CUDA-accelerated Whisper for lightning-fast speech-to-text processing.
+    </Card>
+  </CardGroup>
+</div>
 
-## Make it yours
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">User Guides</h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Learn how to use the tool effectively
+  </p>
+  
+  <CardGroup cols={2}>
+    <Card title="Basic Usage" icon="play" href="/guides/usage">
+      Process videos from YouTube URLs or local files with command-line options.
+    </Card>
+    <Card title="Configuration" icon="sliders" href="/guides/configuration">
+      Customize subtitle styling, highlight criteria, cropping behavior, and video quality.
+    </Card>
+    <Card title="Batch Processing" icon="list" href="/guides/batch-processing">
+      Process multiple videos simultaneously with unique session IDs and auto-approve mode.
+    </Card>
+    <Card title="Docker Deployment" icon="docker" href="/guides/docker">
+      Run the generator in a containerized environment with Docker Compose.
+    </Card>
+  </CardGroup>
+</div>
 
-Design a docs site that looks great and empowers your users.
+<div className="mt-16 mb-16 max-w-5xl mx-auto px-6">
+  <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">Key Features</h2>
+  <p className="text-base text-gray-600 dark:text-gray-400 mb-8">
+    Everything you need to create viral shorts
+  </p>
+  
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div className="p-6 rounded-lg border border-gray-200 dark:border-[#27272a] bg-gray-50 dark:bg-[#1a1d27]">
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">🎬 Flexible Input</h3>
+      <p className="text-sm text-gray-600 dark:text-gray-400">
+        Supports both YouTube URLs and local video files for maximum convenience.
+      </p>
+    </div>
+    
+    <div className="p-6 rounded-lg border border-gray-200 dark:border-[#27272a] bg-gray-50 dark:bg-[#1a1d27]">
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">🤖 AI-Powered Analysis</h3>
+      <p className="text-sm text-gray-600 dark:text-gray-400">
+        GPT-4o-mini intelligently selects the most engaging 2-minute segments automatically.
+      </p>
+    </div>
+    
+    <div className="p-6 rounded-lg border border-gray-200 dark:border-[#27272a] bg-gray-50 dark:bg-[#1a1d27]">
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">📱 Vertical Format</h3>
+      <p className="text-sm text-gray-600 dark:text-gray-400">
+        Perfect 9:16 aspect ratio optimized for TikTok, YouTube Shorts, and Instagram Reels.
+      </p>
+    </div>
+    
+    <div className="p-6 rounded-lg border border-gray-200 dark:border-[#27272a] bg-gray-50 dark:bg-[#1a1d27]">
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">⚙️ Automation Ready</h3>
+      <p className="text-sm text-gray-600 dark:text-gray-400">
+        CLI arguments, auto-quality selection, and timeout-based approvals for batch workflows.
+      </p>
+    </div>
+    
+    <div className="p-6 rounded-lg border border-gray-200 dark:border-[#27272a] bg-gray-50 dark:bg-[#1a1d27]">
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">🎯 Smart Detection</h3>
+      <p className="text-sm text-gray-600 dark:text-gray-400">
+        Automatically detects faces for static crops or applies motion tracking for screen recordings.
+      </p>
+    </div>
+    
+    <div className="p-6 rounded-lg border border-gray-200 dark:border-[#27272a] bg-gray-50 dark:bg-[#1a1d27]">
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">🔄 Concurrent Execution</h3>
+      <p className="text-sm text-gray-600 dark:text-gray-400">
+        Run multiple instances simultaneously with unique session IDs to prevent conflicts.
+      </p>
+    </div>
+  </div>
+</div>
 
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
-  </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
-  </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
-  </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
-
-## Create beautiful pages
-
-Everything you need to create world-class documentation.
-
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
-
-## Need inspiration?
-
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<div className="mt-20 mb-16 max-w-5xl mx-auto px-6">
+  <div className="relative overflow-hidden rounded-2xl border border-gray-200 dark:border-[#27272a] bg-gradient-to-br from-[#87c7df]/5 to-[#9b4dff]/5 p-8 md:p-12">
+    <div className="relative z-10 text-center">
+      <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+        Ready to Create Your First Short?
+      </h2>
+      <p className="text-lg text-gray-600 dark:text-gray-400 mb-8 max-w-2xl mx-auto">
+        Install the tool and start generating engaging vertical videos in minutes.
+      </p>
+      <a
+        href="/installation"
+        className="inline-flex items-center justify-center px-8 py-3 text-base font-semibold text-[#d3d3d3] rounded-lg transition-all duration-200"
+        style={{ background: 'linear-gradient(90deg, #6a5af9 0%, #d35ca6 100%)' }}
+      >
+        Install Now
+      </a>
+    </div>
+  </div>
+</div>

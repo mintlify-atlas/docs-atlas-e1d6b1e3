@@ -1,0 +1,512 @@
+---
+title: 'Batch Processing'
+description: 'Process multiple videos efficiently with xargs, auto-approve, and concurrent execution'
+icon: 'layer-group'
+---
+
+## Overview
+
+The AI YouTube Shorts Generator supports batch processing multiple videos through command-line automation and concurrent execution with unique session IDs.
+
+<Info>
+Each video run generates a unique 8-character session ID for isolated temporary files and output tracking.
+</Info>
+
+## Sequential Processing with xargs
+
+Process multiple URLs one after another using `xargs`.
+
+### Create URL List
+
+Create a `urls.txt` file with one YouTube URL per line:
+
+```txt urls.txt
+https://youtu.be/VIDEO_ID_1
+https://youtu.be/VIDEO_ID_2
+https://youtu.be/VIDEO_ID_3
+https://youtu.be/VIDEO_ID_4
+https://youtu.be/VIDEO_ID_5
+```
+
+### Process with Auto-Approve
+
+Recommended for unattended batch processing:
+
+```bash
+xargs -a urls.txt -I{} ./run.sh --auto-approve {}
+```
+
+<Steps>
+
+<Step title="xargs reads URLs">
+`-a urls.txt` reads input from the file instead of stdin
+</Step>
+
+<Step title="Iterates over lines">
+`-I{}` replaces `{}` with each line from the file
+</Step>
+
+<Step title="Executes run.sh">
+Runs `./run.sh --auto-approve {URL}` for each URL sequentially
+</Step>
+
+<Step title="Auto-approves selections">
+The `--auto-approve` flag skips the 15-second interactive approval prompt
+</Step>
+
+</Steps>
+
+### Process with Manual Approval
+
+For reviewing each selection before processing:
+
+```bash
+xargs -a urls.txt -I{} ./run.sh {}
+```
+
+You'll see the approval prompt for each video:
+
+```
+============================================================
+SELECTED SEGMENT DETAILS:
+Time: 68s - 187s (119s duration)
+============================================================
+
+Options:
+  [Enter/y] Approve and continue
+  [r] Regenerate selection
+  [n] Cancel
+
+Auto-approving in 15 seconds if no input...
+```
+
+<Warning>
+Manual approval requires user input for each video. Consider using auto-approve or the 15-second timeout for hands-off processing.
+</Warning>
+
+## Auto-Approve Flag
+
+The `--auto-approve` flag enables fully automated processing.
+
+### Implementation
+
+From `main.py:16-19`:
+
+```python
+auto_approve = "--auto-approve" in sys.argv
+if auto_approve:
+    sys.argv.remove("--auto-approve")
+```
+
+When set, the approval loop is skipped in `main.py:103-146`:
+
+```python
+approved = auto_approve  # Auto-approve if flag is set
+
+if not auto_approve:
+    while not approved:
+        # Show interactive approval prompt
+        # ...
+else:
+    print(f"\n{'='*60}")
+    print(f"SELECTED SEGMENT: {start}s - {stop}s ({stop-start}s duration)")
+    print(f"{'='*60}")
+    print("Auto-approved (batch mode)\n")
+```
+
+### Usage Examples
+
+<CodeGroup>
+
+```bash Single Video
+./run.sh --auto-approve "https://youtu.be/VIDEO_ID"
+```
+
+```bash Local File
+./run.sh --auto-approve "/path/to/video.mp4"
+```
+
+```bash With xargs
+xargs -a urls.txt -I{} ./run.sh --auto-approve {}
+```
+
+```bash Multiple Local Files
+find ~/videos -name "*.mp4" | xargs -I{} ./run.sh --auto-approve {}
+```
+
+</CodeGroup>
+
+<Note>
+The `--auto-approve` flag must appear **before** the video source argument.
+</Note>
+
+## Concurrent Execution
+
+Run multiple videos simultaneously using background processes and unique session IDs.
+
+### Session ID Isolation
+
+Each run generates a unique session ID for file isolation:
+
+```python main.py:12-14
+session_id = str(uuid.uuid4())[:8]
+print(f"Session ID: {session_id}")
+```
+
+**Example session IDs:**
+- `3f8a9b12`
+- `7c2d4e56`
+- `9a1b3c5d`
+
+### Temporary File Naming
+
+All temporary files include the session ID to prevent conflicts:
+
+```python main.py:62-66
+audio_file = f"audio_{session_id}.wav"
+temp_clip = f"temp_clip_{session_id}.mp4"
+temp_cropped = f"temp_cropped_{session_id}.mp4"
+temp_subtitled = f"temp_subtitled_{session_id}.mp4"
+```
+
+<Tabs>
+  <Tab title="Session A (3f8a9b12)">
+  ```
+  audio_3f8a9b12.wav
+  temp_clip_3f8a9b12.mp4
+  temp_cropped_3f8a9b12.mp4
+  temp_subtitled_3f8a9b12.mp4
+  ```
+  </Tab>
+
+  <Tab title="Session B (7c2d4e56)">
+  ```
+  audio_7c2d4e56.wav
+  temp_clip_7c2d4e56.mp4
+  temp_cropped_7c2d4e56.mp4
+  temp_subtitled_7c2d4e56.mp4
+  ```
+  </Tab>
+
+  <Tab title="Session C (9a1b3c5d)">
+  ```
+  audio_9a1b3c5d.wav
+  temp_clip_9a1b3c5d.mp4
+  temp_cropped_9a1b3c5d.mp4
+  temp_subtitled_9a1b3c5d.mp4
+  ```
+  </Tab>
+</Tabs>
+
+### Running Videos in Parallel
+
+Launch multiple instances as background jobs:
+
+```bash
+./run.sh --auto-approve "https://youtu.be/VIDEO1" &
+./run.sh --auto-approve "https://youtu.be/VIDEO2" &
+./run.sh --auto-approve "https://youtu.be/VIDEO3" &
+wait
+```
+
+<Steps>
+
+<Step title="Launch background processes">
+The `&` operator runs each command in the background
+</Step>
+
+<Step title="Unique session IDs assigned">
+Each process gets a unique 8-character identifier
+</Step>
+
+<Step title="Isolated temp files">
+No file naming conflicts occur between concurrent runs
+</Step>
+
+<Step title="Wait for completion">
+The `wait` command blocks until all background jobs finish
+</Step>
+
+</Steps>
+
+### Parallel Processing with xargs
+
+Process multiple videos concurrently using `xargs -P`:
+
+```bash
+xargs -a urls.txt -P 3 -I{} ./run.sh --auto-approve {}
+```
+
+**Parameters:**
+- `-P 3`: Run 3 processes in parallel
+- `-a urls.txt`: Read URLs from file
+- `-I{}`: Placeholder for each URL
+- `--auto-approve`: Skip interactive prompts
+
+<Accordion title="Determining Optimal Parallelism">
+
+**Factors to consider:**
+
+<Steps>
+
+<Step title="GPU availability">
+If using CUDA-accelerated Whisper, multiple processes may compete for GPU memory:
+```bash
+# Check GPU usage
+nvidia-smi
+```
+
+Recommendation: 2-3 parallel processes for 8GB GPU
+</Step>
+
+<Step title="CPU cores">
+For CPU-only setups:
+```bash
+# Check CPU cores
+nproc
+```
+
+Recommendation: Use `nproc` minus 1-2 cores
+</Step>
+
+<Step title="Memory usage">
+Each process uses ~2-4GB RAM during processing:
+```bash
+# Check available memory
+free -h
+```
+
+Recommendation: Ensure 4GB+ free per concurrent process
+</Step>
+
+<Step title="API rate limits">
+OpenAI API has rate limits that may throttle concurrent requests. Consider:
+- Free tier: 3 RPM (requests per minute)
+- Pay-as-you-go: 3,500 RPM
+- Higher tiers: 10,000+ RPM
+</Step>
+
+</Steps>
+
+</Accordion>
+
+<Accordion title="Example: 10 Videos with 3 Parallel Jobs">
+
+```bash
+# urls.txt contains 10 URLs
+xargs -a urls.txt -P 3 -I{} ./run.sh --auto-approve {}
+```
+
+**Execution flow:**
+
+1. Videos 1-3 start immediately
+2. As Video 1 completes, Video 4 starts
+3. As Video 2 completes, Video 5 starts
+4. Process continues until all 10 are done
+
+**Time savings:**
+- Sequential: ~50 minutes (5 min/video × 10)
+- Parallel (3 jobs): ~20 minutes (5 min/video × 10 / 3)
+
+</Accordion>
+
+## Output File Tracking
+
+Output filenames include session IDs for traceability:
+
+```python main.py:164-165
+clean_title = clean_filename(video_title) if video_title else "output"
+final_output = f"{clean_title}_{session_id}_short.mp4"
+```
+
+**Example outputs from concurrent runs:**
+
+```
+how-to-code-python_3f8a9b12_short.mp4
+how-to-code-python_7c2d4e56_short.mp4
+how-to-code-python_9a1b3c5d_short.mp4
+```
+
+<Info>
+Even when processing the same video multiple times, each output has a unique filename due to the session ID.
+</Info>
+
+## Handling Conflicts
+
+Potential conflict scenarios and solutions:
+
+### Shared Downloads Directory
+
+<Warning>
+All instances share the `videos/` directory for YouTube downloads. If processing the same URL concurrently, downloads may conflict.
+</Warning>
+
+**Solution: Pre-download videos**
+
+```bash
+# Download all videos first
+for url in $(cat urls.txt); do
+  youtube-dl -f best "$url" -o "videos/%(title)s.%(ext)s"
+done
+
+# Then process local files concurrently
+find videos/ -name "*.mp4" | xargs -P 3 -I{} ./run.sh --auto-approve {}
+```
+
+### API Rate Limiting
+
+If you hit OpenAI API rate limits:
+
+```
+ERROR IN GetHighlight FUNCTION:
+Exception type: RateLimitError
+Exception message: Rate limit exceeded
+```
+
+**Solutions:**
+
+<Steps>
+
+<Step title="Reduce parallelism">
+```bash
+# Instead of -P 5
+xargs -a urls.txt -P 2 -I{} ./run.sh --auto-approve {}
+```
+</Step>
+
+<Step title="Add delays between starts">
+```bash
+while IFS= read -r url; do
+  ./run.sh --auto-approve "$url" &
+  sleep 10  # 10-second delay
+done < urls.txt
+wait
+```
+</Step>
+
+<Step title="Upgrade API tier">
+Contact OpenAI to increase rate limits for your account.
+</Step>
+
+</Steps>
+
+### Disk Space
+
+Each video generates temporary files:
+
+```
+audio_{session}.wav           (~50-100MB)
+temp_clip_{session}.mp4       (~20-80MB)
+temp_cropped_{session}.mp4    (~15-60MB)
+temp_subtitled_{session}.mp4  (~15-60MB)
+final_{session}_short.mp4     (~15-60MB)
+```
+
+**Total per video:** ~115-360MB during processing, ~15-60MB after cleanup
+
+**Monitoring:**
+
+```bash
+# Check disk usage
+df -h .
+
+# Watch disk space during batch processing
+watch -n 5 'df -h . && ls -lh *.mp4 *.wav 2>/dev/null | wc -l'
+```
+
+### Cleanup
+
+Temporary files are automatically removed after each successful run (`main.py:173-180`):
+
+```python
+try:
+    for temp_file in [audio_file, temp_clip, temp_cropped, temp_subtitled]:
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
+    print(f"Cleaned up temporary files for session {session_id}")
+except Exception as e:
+    print(f"Warning: Could not clean up some temporary files: {e}")
+```
+
+If a run is interrupted, manually clean up:
+
+```bash
+# Remove all temporary files
+rm -f audio_*.wav temp_*.mp4
+
+# Keep only final outputs
+find . -name "*_short.mp4" -type f
+```
+
+## Advanced Batch Patterns
+
+### Process Specific Date Range
+
+```bash
+# Filter URLs by date in filename
+grep '2024-01' urls.txt | xargs -I{} ./run.sh --auto-approve {}
+```
+
+### Retry Failed Videos
+
+Create a script to track failures:
+
+```bash retry.sh
+#!/bin/bash
+
+while IFS= read -r url; do
+  echo "Processing: $url"
+  ./run.sh --auto-approve "$url"
+  
+  if [ $? -ne 0 ]; then
+    echo "$url" >> failed_urls.txt
+    echo "FAILED: $url"
+  else
+    echo "SUCCESS: $url"
+  fi
+done < urls.txt
+
+echo "Failed URLs saved to failed_urls.txt"
+```
+
+Reprocess failures:
+
+```bash
+chmod +x retry.sh
+./retry.sh
+
+# Retry failed ones
+if [ -f failed_urls.txt ]; then
+  xargs -a failed_urls.txt -I{} ./run.sh --auto-approve {}
+fi
+```
+
+### Process with Custom Priority
+
+```bash
+# High priority (sequential, immediate attention)
+head -3 urls.txt | xargs -I{} ./run.sh {}
+
+# Medium priority (parallel, auto-approve)
+tail -n +4 urls.txt | head -10 | xargs -P 3 -I{} ./run.sh --auto-approve {}
+
+# Low priority (background, throttled)
+tail -n +14 urls.txt | while read url; do
+  ./run.sh --auto-approve "$url" &
+  sleep 30
+done
+```
+
+### Organize Outputs by Session
+
+```bash
+# Create session-specific directories
+mkdir -p output/session_$(date +%Y%m%d_%H%M%S)
+
+# Process and move outputs
+xargs -a urls.txt -P 2 -I{} bash -c './run.sh --auto-approve "{}" && mv *_short.mp4 output/session_$(date +%Y%m%d_%H%M%S)/'
+```
+
+<Info>
+For large-scale batch processing (100+ videos), consider using a job queue system like Celery or RQ with Redis for better management and monitoring.
+</Info>

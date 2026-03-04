@@ -1,0 +1,642 @@
+---
+title: 'Docker Setup'
+description: 'Run the AI YouTube Shorts Generator in Docker containers with GPU support'
+icon: 'docker'
+---
+
+## Docker Installation
+
+The project includes Docker and Docker Compose configurations for containerized execution with NVIDIA GPU support.
+
+<Warning>
+Docker setup requires NVIDIA Container Toolkit for GPU-accelerated Whisper transcription. CPU-only Docker support is available but significantly slower.
+</Warning>
+
+## Prerequisites
+
+<Steps>
+
+<Step title="Install Docker">
+Ensure Docker is installed and running:
+
+```bash
+docker --version
+```
+
+If not installed, follow the [official Docker installation guide](https://docs.docker.com/engine/install/).
+</Step>
+
+<Step title="Install Docker Compose">
+Docker Compose v2 is included with Docker Desktop. For Linux:
+
+```bash
+docker compose version
+```
+
+If needed, install from [Docker Compose docs](https://docs.docker.com/compose/install/).
+</Step>
+
+<Step title="Install NVIDIA Container Toolkit (GPU only)">
+For CUDA-accelerated transcription:
+
+```bash Ubuntu/Debian
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+
+curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+  sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+  sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
+
+sudo apt-get update
+sudo apt-get install -y nvidia-container-toolkit
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
+```
+
+Verify GPU access:
+
+```bash
+docker run --rm --gpus all nvidia/cuda:12.1.0-base-ubuntu22.04 nvidia-smi
+```
+</Step>
+
+<Step title="Create .env file">
+Create a `.env` file in the project root with your OpenAI API key:
+
+```bash .env
+OPENAI_API=your_openai_api_key_here
+```
+</Step>
+
+</Steps>
+
+## Dockerfile Configuration
+
+The project uses an NVIDIA CUDA base image for GPU support.
+
+### Base Image
+
+```dockerfile Dockerfile:1-2
+FROM nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04
+```
+
+Provides:
+- CUDA 12.1.0 runtime
+- cuDNN 8 for deep learning
+- Ubuntu 22.04 base system
+
+### System Dependencies
+
+```dockerfile Dockerfile:10-24
+RUN apt-get update && apt-get install -y \
+    python3.10 \
+    python3.10-venv \
+    python3-pip \
+    ffmpeg \
+    libavdevice-dev \
+    libavfilter-dev \
+    libopus-dev \
+    libvpx-dev \
+    pkg-config \
+    libsrtp2-dev \
+    imagemagick \
+    git \
+    wget \
+    && rm -rf /var/lib/apt/lists/*
+```
+
+<Tabs>
+  <Tab title="FFmpeg">
+  Video processing, audio extraction, and format conversion.
+  </Tab>
+
+  <Tab title="ImageMagick">
+  Subtitle rendering and text overlay generation.
+  </Tab>
+
+  <Tab title="Audio Libraries">
+  `libopus-dev`, `libvpx-dev`, `libsrtp2-dev` for audio codec support.
+  </Tab>
+
+  <Tab title="Python 3.10">
+  Required Python version with virtual environment support.
+  </Tab>
+</Tabs>
+
+### ImageMagick Policy Fix
+
+Critical for subtitle rendering:
+
+```dockerfile Dockerfile:27
+RUN sed -i 's/rights="none" pattern="@\*"/rights="read|write" pattern="@*"/' /etc/ImageMagick-6/policy.xml
+```
+
+<Info>
+Without this fix, ImageMagick will refuse to write temporary files, causing subtitle generation to fail.
+</Info>
+
+### CUDA Library Path
+
+```dockerfile Dockerfile:45
+ENV LD_LIBRARY_PATH=/usr/local/lib/python3.10/dist-packages/nvidia/cudnn/lib:/usr/local/lib/python3.10/dist-packages/nvidia/cublas/lib:$LD_LIBRARY_PATH
+```
+
+Ensures Whisper can find NVIDIA CUDA libraries for GPU acceleration.
+
+## Docker Compose Configuration
+
+The `docker-compose.yml` file defines the service with GPU support and volume mounts.
+
+### GPU Configuration
+
+```yaml docker-compose.yml:10-16
+deploy:
+  resources:
+    reservations:
+      devices:
+        - driver: nvidia
+          count: 1
+          capabilities: [gpu]
+```
+
+<Steps>
+
+<Step title="GPU driver">
+`driver: nvidia` specifies NVIDIA GPU access
+</Step>
+
+<Step title="GPU count">
+`count: 1` allocates one GPU (change for multi-GPU setups)
+</Step>
+
+<Step title="Capabilities">
+`capabilities: [gpu]` enables GPU compute access
+</Step>
+
+</Steps>
+
+### Environment Variables
+
+```yaml docker-compose.yml:19-21
+environment:
+  - NVIDIA_VISIBLE_DEVICES=all
+  - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+```
+
+<Accordion title="NVIDIA_VISIBLE_DEVICES">
+Controls which GPUs are visible to the container:
+- `all`: All GPUs available
+- `0`: Only GPU 0
+- `0,1`: GPUs 0 and 1
+- `none`: No GPU access (CPU-only)
+</Accordion>
+
+<Accordion title="NVIDIA_DRIVER_CAPABILITIES">
+Defines GPU capabilities:
+- `compute`: CUDA compute operations
+- `utility`: nvidia-smi and monitoring tools
+- `graphics`: Graphics rendering (not needed here)
+- `video`: Video encode/decode (not needed here)
+</Accordion>
+
+### Volume Mounts
+
+```yaml docker-compose.yml:28-31
+volumes:
+  - ./videos:/app/videos          # Input videos
+  - ./output:/app/output          # Output directory
+  - ./.env:/app/.env:ro           # OpenAI API key (read-only)
+```
+
+<Tabs>
+  <Tab title="./videos:/app/videos">
+  **Purpose**: YouTube downloads and local video input
+
+  **Host path**: `./videos` (create if doesn't exist)
+  
+  **Container path**: `/app/videos`
+
+  **Usage**:
+  ```bash
+  # Place local videos here
+  cp ~/Downloads/my-video.mp4 ./videos/
+  
+  # Container downloads go here
+  docker compose run youtube-shorts-generator ./run.sh "https://youtu.be/ID"
+  ```
+  </Tab>
+
+  <Tab title="./output:/app/output">
+  **Purpose**: Final short video outputs
+
+  **Host path**: `./output` (created automatically)
+  
+  **Container path**: `/app/output`
+
+  **Output naming**: `{title}_{session-id}_short.mp4`
+
+  **Access**:
+  ```bash
+  ls -lh ./output/
+  ```
+  </Tab>
+
+  <Tab title="./.env:/app/.env:ro">
+  **Purpose**: OpenAI API key configuration
+
+  **Host path**: `./.env`
+  
+  **Container path**: `/app/.env`
+
+  **Read-only**: `:ro` flag prevents container from modifying the file
+
+  **Alternative**: Use `env_file` (already configured on line 24-25)
+  </Tab>
+</Tabs>
+
+<Info>
+Volumes persist data between container runs. Downloaded videos remain in `./videos/` for reuse.
+</Info>
+
+### Interactive Mode
+
+```yaml docker-compose.yml:34-35
+stdin_open: true
+tty: true
+```
+
+Enables interactive input for:
+- YouTube URL prompts
+- Resolution selection
+- Approval workflow
+
+Equivalent to `docker run -it`.
+
+## Building the Image
+
+Build the Docker image before first use:
+
+<CodeGroup>
+
+```bash Docker Compose
+docker compose build
+```
+
+```bash Docker CLI
+docker build -t ai-youtube-shorts-generator .
+```
+
+</CodeGroup>
+
+**Build process:**
+
+1. Downloads NVIDIA CUDA base image (~2GB)
+2. Installs system dependencies
+3. Fixes ImageMagick policy
+4. Installs Python packages from `requirements.txt`
+5. Copies application code
+6. Sets up CUDA library paths
+
+**Build time:** 5-10 minutes (depending on network speed)
+
+<Note>
+The image is ~6-8GB due to CUDA runtime and dependencies. Ensure sufficient disk space.
+</Note>
+
+## Running with Docker Compose
+
+### Interactive Mode
+
+Run with prompts for URL and approval:
+
+```bash
+docker compose up
+```
+
+You'll see:
+
+```
+Session ID: 3f8a9b12
+Enter YouTube video URL or local video file path:
+```
+
+<Warning>
+Use `docker compose up` for interactive mode, not `docker compose up -d` (detached mode won't show prompts).
+</Warning>
+
+### Command-Line Mode
+
+Process a specific video without interaction:
+
+```bash
+docker compose run youtube-shorts-generator ./run.sh "https://youtu.be/VIDEO_ID"
+```
+
+### Auto-Approve Mode
+
+Fully automated processing:
+
+```bash
+docker compose run youtube-shorts-generator ./run.sh --auto-approve "https://youtu.be/VIDEO_ID"
+```
+
+### Local File Processing
+
+Process videos from the mounted `./videos` directory:
+
+```bash
+# Copy video to mounted directory
+cp ~/my-video.mp4 ./videos/
+
+# Process inside container
+docker compose run youtube-shorts-generator ./run.sh "/app/videos/my-video.mp4"
+```
+
+## Running with Docker CLI
+
+Alternative to Docker Compose for more control:
+
+### Basic Run
+
+```bash
+docker run --rm \
+  --gpus all \
+  -v $(pwd)/.env:/app/.env:ro \
+  -v $(pwd)/videos:/app/videos \
+  -v $(pwd)/output:/app/output \
+  -it \
+  ai-youtube-shorts-generator
+```
+
+<Accordion title="Flag Explanations">
+
+| Flag | Purpose |
+|------|--------|
+| `--rm` | Remove container after exit |
+| `--gpus all` | Enable all GPUs |
+| `-v $(pwd)/.env:/app/.env:ro` | Mount API key (read-only) |
+| `-v $(pwd)/videos:/app/videos` | Mount videos directory |
+| `-v $(pwd)/output:/app/output` | Mount output directory |
+| `-it` | Interactive mode with TTY |
+| `ai-youtube-shorts-generator` | Image name |
+
+</Accordion>
+
+### With Command-Line Arguments
+
+```bash
+docker run --rm \
+  --gpus all \
+  -v $(pwd)/.env:/app/.env:ro \
+  -v $(pwd)/videos:/app/videos \
+  -v $(pwd)/output:/app/output \
+  ai-youtube-shorts-generator \
+  ./run.sh --auto-approve "https://youtu.be/VIDEO_ID"
+```
+
+### CPU-Only Mode
+
+Run without GPU (significantly slower transcription):
+
+```bash
+docker run --rm \
+  -v $(pwd)/.env:/app/.env:ro \
+  -v $(pwd)/videos:/app/videos \
+  -v $(pwd)/output:/app/output \
+  -it \
+  ai-youtube-shorts-generator
+```
+
+<Info>
+CPU-only transcription can take 10-20x longer than GPU-accelerated processing.
+</Info>
+
+## Batch Processing with Docker
+
+### Sequential Processing
+
+```bash
+while IFS= read -r url; do
+  docker compose run youtube-shorts-generator ./run.sh --auto-approve "$url"
+done < urls.txt
+```
+
+### Parallel Processing
+
+```bash
+cat urls.txt | xargs -P 3 -I{} \
+  docker compose run youtube-shorts-generator ./run.sh --auto-approve "{}"
+```
+
+<Warning>
+Running multiple Docker containers in parallel may cause GPU memory issues. Limit parallelism based on available VRAM:
+- 8GB GPU: 2-3 containers max
+- 16GB GPU: 4-5 containers max
+- 24GB+ GPU: 6+ containers
+</Warning>
+
+## Troubleshooting
+
+### GPU Not Detected
+
+**Symptom:**
+```
+Could not load dynamic library 'libcudnn.so.8'
+```
+
+**Solutions:**
+
+<Steps>
+
+<Step title="Verify NVIDIA drivers">
+```bash
+nvidia-smi
+```
+Ensure drivers are installed on host.
+</Step>
+
+<Step title="Check Docker GPU access">
+```bash
+docker run --rm --gpus all nvidia/cuda:12.1.0-base-ubuntu22.04 nvidia-smi
+```
+Verify NVIDIA Container Toolkit works.
+</Step>
+
+<Step title="Restart Docker daemon">
+```bash
+sudo systemctl restart docker
+```
+</Step>
+
+<Step title="Check docker-compose.yml GPU config">
+Ensure GPU reservation is correctly configured:
+```yaml
+deploy:
+  resources:
+    reservations:
+      devices:
+        - driver: nvidia
+          count: 1
+          capabilities: [gpu]
+```
+</Step>
+
+</Steps>
+
+### ImageMagick Policy Error
+
+**Symptom:**
+```
+ImageMagick security policy blocks '@' pattern
+```
+
+**Solution:**
+
+Rebuild image to apply the policy fix:
+
+```bash
+docker compose build --no-cache
+```
+
+The Dockerfile includes the fix on line 27:
+```dockerfile
+RUN sed -i 's/rights="none" pattern="@\*"/rights="read|write" pattern="@*"/' /etc/ImageMagick-6/policy.xml
+```
+
+### Volume Permission Issues
+
+**Symptom:**
+```
+Permission denied: '/app/output/video_short.mp4'
+```
+
+**Solution:**
+
+Ensure host directories have correct permissions:
+
+```bash
+mkdir -p videos output
+chmod 777 videos output
+```
+
+Or run container with user mapping:
+
+```yaml docker-compose.yml
+user: "${UID}:${GID}"
+```
+
+Then:
+
+```bash
+UID=$(id -u) GID=$(id -g) docker compose run youtube-shorts-generator
+```
+
+### Out of Memory (OOM)
+
+**Symptom:**
+```
+CUDA out of memory
+```
+
+**Solutions:**
+
+<Tabs>
+  <Tab title="Reduce parallelism">
+  Run fewer concurrent containers:
+  ```bash
+  # Instead of -P 5
+  cat urls.txt | xargs -P 2 -I{} docker compose run youtube-shorts-generator ./run.sh --auto-approve "{}"
+  ```
+  </Tab>
+
+  <Tab title="Lower video resolution">
+  Select lower resolution during YouTube download (480p instead of 1080p).
+  </Tab>
+
+  <Tab title="Increase GPU memory">
+  Use a GPU with more VRAM or reduce other GPU workloads.
+  </Tab>
+
+  <Tab title="CPU-only mode">
+  Remove GPU access for CPU-based transcription:
+  ```bash
+  docker run --rm \
+    -v $(pwd)/.env:/app/.env:ro \
+    -v $(pwd)/videos:/app/videos \
+    -v $(pwd)/output:/app/output \
+    -it \
+    ai-youtube-shorts-generator
+  ```
+  </Tab>
+</Tabs>
+
+### Container Exits Immediately
+
+**Symptom:**
+```
+docker compose up
+Exited with code 1
+```
+
+**Check logs:**
+
+```bash
+docker compose logs
+```
+
+Common issues:
+- Missing `.env` file → Create `.env` with `OPENAI_API=your_key`
+- Invalid API key → Verify key at https://platform.openai.com/api-keys
+- Missing volumes → Ensure `videos/` and `output/` directories exist
+
+## Performance Optimization
+
+### Docker Build Cache
+
+Speed up rebuilds by leveraging layer caching:
+
+```dockerfile
+# requirements.txt copied separately for caching
+COPY requirements.txt .
+RUN pip3 install --no-cache-dir -r requirements.txt
+
+# Application code copied last (changes frequently)
+COPY . .
+```
+
+Changing Python code won't invalidate the pip install layer.
+
+### Shared Volume for Downloads
+
+Reuse downloaded videos across runs:
+
+```bash
+# Download once
+docker compose run youtube-shorts-generator ./run.sh "https://youtu.be/VIDEO_ID"
+
+# Videos persist in ./videos/
+ls -lh ./videos/
+
+# Process again without re-downloading
+docker compose run youtube-shorts-generator ./run.sh "/app/videos/video_file.mp4"
+```
+
+### Pre-built Image
+
+Build once, run many times:
+
+```bash
+# Build and tag
+docker build -t ai-shorts:v1.0 .
+
+# Run without rebuilding
+docker run --rm --gpus all \
+  -v $(pwd)/.env:/app/.env:ro \
+  -v $(pwd)/videos:/app/videos \
+  -v $(pwd)/output:/app/output \
+  ai-shorts:v1.0 \
+  ./run.sh --auto-approve "https://youtu.be/VIDEO_ID"
+```
+
+<Info>
+For production deployments, consider pushing the image to Docker Hub or a private registry for faster distribution.
+</Info>

@@ -1,0 +1,459 @@
+---
+title: 'CPU Installation Guide'
+description: 'Install and run the AI YouTube Shorts Generator without an NVIDIA GPU using CPU-only mode'
+---
+
+This guide covers how to install and use the AI YouTube Shorts Generator on systems without an NVIDIA GPU. CPU mode supports all features but with slower transcription speeds.
+
+<Info>
+  CPU transcription is 5-10x slower than GPU mode. A 5-minute video may take 3-5 minutes to transcribe on CPU vs. 30 seconds on GPU.
+</Info>
+
+## System Requirements
+
+<Accordion title="Minimum Requirements">
+  - **CPU**: Modern multi-core processor (Intel i5/AMD Ryzen 5 or better)
+  - **RAM**: 8GB minimum, 16GB recommended
+  - **Python**: 3.10 or higher
+  - **Storage**: 2GB for dependencies + space for video files
+  - **OS**: Windows 10/11, Ubuntu 20.04+, or macOS 11+
+</Accordion>
+
+<Warning>
+  CPU mode requires significantly more RAM than GPU mode. Ensure you have at least 8GB available, especially for longer videos.
+</Warning>
+
+## Installation by Platform
+
+<Tabs>
+  <Tab title="Windows">
+    ### Windows CPU Installation
+
+    <Steps>
+      <Step title="Install FFmpeg">
+        **Option 1: Using Chocolatey (Recommended)**
+        ```powershell
+        # Run PowerShell as Administrator
+        choco install ffmpeg -y
+        ```
+
+        **Option 2: Using Scoop**
+        ```powershell
+        scoop install ffmpeg
+        ```
+
+        **Option 3: Manual Installation**
+        - Download from [ffmpeg.org/download.html](https://ffmpeg.org/download.html)
+        - Extract to `C:\ffmpeg`
+        - Add `C:\ffmpeg\bin` to system PATH
+      </Step>
+
+      <Step title="Install ImageMagick">
+        ```powershell
+        choco install imagemagick -y
+        ```
+
+        **Configure ImageMagick policy:**
+        
+        Edit `C:\Program Files\ImageMagick-7.x.x-Q16-HDRI\config\policy.xml`
+        
+        Find:
+        ```xml
+        <policy domain="path" rights="none" pattern="@*"/>
+        ```
+        
+        Change to:
+        ```xml
+        <policy domain="path" rights="read|write" pattern="@*"/>
+        ```
+      </Step>
+
+      <Step title="Create Virtual Environment">
+        ```powershell
+        # Navigate to project directory
+        cd AI-Youtube-Shorts-Generator
+
+        # Create virtual environment
+        python -m venv venv
+
+        # Activate virtual environment
+        .\venv\Scripts\Activate.ps1
+        ```
+
+        <Note>
+          If you get an execution policy error, run:
+          ```powershell
+          Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+          ```
+        </Note>
+      </Step>
+
+      <Step title="Install CPU PyTorch">
+        **IMPORTANT: Install PyTorch first with CPU support:**
+        ```powershell
+        pip install torch --index-url https://download.pytorch.org/whl/cpu
+        ```
+      </Step>
+
+      <Step title="Install Other Dependencies">
+        ```powershell
+        pip install -r requirements-cpu.txt
+        ```
+      </Step>
+
+      <Step title="Configure API Key">
+        Create a `.env` file in the project root:
+        ```bash
+        OPENAI_API=your_openai_api_key_here
+        ```
+      </Step>
+    </Steps>
+  </Tab>
+
+  <Tab title="Linux">
+    ### Linux CPU Installation
+
+    <Steps>
+      <Step title="Install System Dependencies">
+        **Ubuntu/Debian:**
+        ```bash
+        sudo apt update
+        sudo apt install -y ffmpeg libavdevice-dev libavfilter-dev \
+          libopus-dev libvpx-dev pkg-config libsrtp2-dev imagemagick
+        ```
+
+        **Fedora:**
+        ```bash
+        sudo dnf install ffmpeg ffmpeg-devel imagemagick
+        ```
+      </Step>
+
+      <Step title="Fix ImageMagick Policy">
+        ```bash
+        sudo sed -i 's/rights="none" pattern="@\*"/rights="read|write" pattern="@*"/' /etc/ImageMagick-6/policy.xml
+        ```
+
+        <Tip>
+          On some systems, the policy file may be at `/etc/ImageMagick-7/policy.xml`. Check which version you have.
+        </Tip>
+      </Step>
+
+      <Step title="Create Virtual Environment">
+        ```bash
+        cd AI-Youtube-Shorts-Generator
+        python3.10 -m venv venv
+        source venv/bin/activate
+        ```
+      </Step>
+
+      <Step title="Install CPU PyTorch">
+        ```bash
+        pip install torch --index-url https://download.pytorch.org/whl/cpu
+        ```
+      </Step>
+
+      <Step title="Install Other Dependencies">
+        ```bash
+        pip install -r requirements-cpu.txt
+        ```
+      </Step>
+
+      <Step title="Configure API Key">
+        ```bash
+        echo 'OPENAI_API=your_openai_api_key_here' > .env
+        ```
+      </Step>
+    </Steps>
+  </Tab>
+
+  <Tab title="macOS">
+    ### macOS CPU Installation
+
+    <Steps>
+      <Step title="Install Homebrew Dependencies">
+        ```bash
+        brew install ffmpeg imagemagick
+        ```
+      </Step>
+
+      <Step title="Create Virtual Environment">
+        ```bash
+        cd AI-Youtube-Shorts-Generator
+        python3.10 -m venv venv
+        source venv/bin/activate
+        ```
+      </Step>
+
+      <Step title="Install CPU PyTorch">
+        ```bash
+        pip install torch --index-url https://download.pytorch.org/whl/cpu
+        ```
+      </Step>
+
+      <Step title="Install Other Dependencies">
+        ```bash
+        pip install -r requirements-cpu.txt
+        ```
+      </Step>
+
+      <Step title="Configure API Key">
+        ```bash
+        echo 'OPENAI_API=your_openai_api_key_here' > .env
+        ```
+      </Step>
+    </Steps>
+
+    <Info>
+      macOS with Apple Silicon (M1/M2/M3) can use MPS (Metal Performance Shaders) for some acceleration, but this configuration uses CPU mode for maximum compatibility.
+    </Info>
+  </Tab>
+</Tabs>
+
+## Verify Installation
+
+Confirm CPU mode is active:
+
+```bash
+python -c "import torch; print('CUDA available:', torch.cuda.is_available())"
+```
+
+**Expected output:**
+```
+CUDA available: False
+```
+
+<Tip>
+  If this shows `True`, you accidentally installed the GPU version of PyTorch. Uninstall and reinstall from the CPU index.
+</Tip>
+
+## CPU Requirements File
+
+The `requirements-cpu.txt` file excludes all NVIDIA CUDA packages that are in the standard `requirements.txt`. Key differences:
+
+<Accordion title="What's Different in requirements-cpu.txt">
+  **Excluded packages:**
+  - All `nvidia-*` packages (CUDA runtime, cuDNN, etc.)
+  - GPU-specific PyTorch wheels
+
+  **Included packages:**
+  - CPU-only versions of core dependencies
+  - `faster-whisper==1.0.1` - CPU-compatible transcription
+  - `torch` (installed separately from CPU index)
+  - All other standard dependencies (OpenCV, MoviePy, LangChain, etc.)
+
+  **Total size:** ~800MB of Python packages (vs. ~4GB with CUDA)
+</Accordion>
+
+### Full Requirements List
+
+The `requirements-cpu.txt` includes:
+
+```txt
+# Key packages
+faster-whisper==1.0.1      # Speech-to-text transcription
+langchain==0.3.25          # LLM framework
+langchain-openai==0.3.0    # OpenAI integration
+moviepy==1.0.3             # Video editing
+opencv-python==4.8.1.78    # Computer vision
+pytubefix==9.1.1           # YouTube downloads
+python-dotenv==1.0.1       # Environment variables
+
+# And 70+ supporting dependencies...
+```
+
+<Note>
+  PyTorch must be installed separately from the CPU index before installing `requirements-cpu.txt`.
+</Note>
+
+## Performance Comparison
+
+Typical processing times for a 5-minute YouTube video:
+
+| Task | GPU (CUDA) | CPU |
+|------|------------|-----|
+| **Download** | 10-30s | 10-30s |
+| **Audio extraction** | 2-5s | 2-5s |
+| **Transcription** | 30-60s | 3-5 min |
+| **Highlight selection** | 5-10s | 5-10s |
+| **Video processing** | 20-40s | 25-50s |
+| **Total** | **1-2 min** | **4-7 min** |
+
+<Warning>
+  Longer videos (15-30 minutes) can take 15-30 minutes to transcribe on CPU. Consider processing overnight for large batches.
+</Warning>
+
+## Running in CPU Mode
+
+Usage is identical to GPU mode:
+
+### Interactive Mode
+```bash
+python main.py
+```
+
+### Command-Line Mode
+```bash
+python main.py "https://youtu.be/VIDEO_ID"
+```
+
+### Batch Processing
+```bash
+xargs -a urls.txt -I{} python main.py --auto-approve {}
+```
+
+<Info>
+  The application automatically detects CPU mode and adjusts accordingly. No code changes are needed.
+</Info>
+
+## Optimization Tips
+
+<Steps>
+  <Step title="Close Background Applications">
+    Free up RAM by closing unnecessary programs, especially browsers with many tabs.
+  </Step>
+  <Step title="Process Shorter Videos First">
+    Start with 2-5 minute videos to get faster results. The highlight selection works best with 5-15 minute source videos anyway.
+  </Step>
+  <Step title="Use Batch Processing Overnight">
+    For multiple videos, use the `--auto-approve` flag and run overnight:
+    ```bash
+    xargs -a urls.txt -I{} sh -c 'python main.py --auto-approve {} && sleep 10'
+    ```
+  </Step>
+  <Step title="Monitor Resource Usage">
+    Watch CPU and memory usage:
+    
+    **Linux/macOS:**
+    ```bash
+    htop
+    ```
+    
+    **Windows:**
+    Open Task Manager (Ctrl+Shift+Esc)
+  </Step>
+</Steps>
+
+## Switching Between CPU and GPU
+
+<Tabs>
+  <Tab title="CPU → GPU">
+    If you later add an NVIDIA GPU:
+
+    <Steps>
+      <Step title="Uninstall CPU PyTorch">
+        ```bash
+        pip uninstall torch
+        ```
+      </Step>
+      <Step title="Install CUDA Toolkit">
+        Follow NVIDIA's installation guide for your OS.
+      </Step>
+      <Step title="Install GPU PyTorch">
+        ```bash
+        pip install torch --index-url https://download.pytorch.org/whl/cu118
+        ```
+      </Step>
+      <Step title="Install Full Requirements">
+        ```bash
+        pip install -r requirements.txt
+        ```
+      </Step>
+    </Steps>
+  </Tab>
+  <Tab title="GPU → CPU">
+    To revert to CPU mode:
+
+    <Steps>
+      <Step title="Uninstall All Dependencies">
+        ```bash
+        pip uninstall -r requirements.txt -y
+        ```
+      </Step>
+      <Step title="Install CPU PyTorch">
+        ```bash
+        pip install torch --index-url https://download.pytorch.org/whl/cpu
+        ```
+      </Step>
+      <Step title="Install CPU Requirements">
+        ```bash
+        pip install -r requirements-cpu.txt
+        ```
+      </Step>
+    </Steps>
+  </Tab>
+</Tabs>
+
+## Troubleshooting CPU Installation
+
+### Issue: Still Using GPU Libraries
+
+If you see CUDA-related errors after CPU installation:
+
+```bash
+# Verify no NVIDIA packages are installed
+pip list | grep nvidia
+```
+
+Should return nothing. If packages are listed:
+
+```bash
+pip uninstall $(pip list | grep nvidia | awk '{print $1}') -y
+```
+
+### Issue: Out of Memory Errors
+
+If transcription fails with memory errors:
+
+1. **Close other applications** to free RAM
+2. **Process shorter video segments** (< 5 minutes)
+3. **Increase system swap space** (Linux) or virtual memory (Windows)
+
+### Issue: Very Slow Performance
+
+If CPU transcription is taking excessively long:
+
+1. **Check CPU usage**: Should be near 100% during transcription
+2. **Disable power saving**: Ensure your system isn't throttling CPU
+3. **Consider alternatives**: The [AI Clipping API](https://muapi.ai/playground/ai-clipping) offers faster cloud processing
+
+<Tip>
+  For occasional use, CPU mode works fine. For frequent processing or longer videos, GPU acceleration or a cloud API may be more practical.
+</Tip>
+
+## When to Use CPU Mode
+
+**CPU mode is ideal for:**
+- 💻 Laptops without dedicated GPUs
+- 🖥️ Desktop systems with AMD or Intel graphics
+- 🍎 Apple Silicon Macs (M1/M2/M3)
+- 📦 Minimal installation footprint (~800MB vs. ~4GB)
+- 🧪 Testing and development
+
+**Consider GPU mode for:**
+- ⚡ Frequent video processing
+- 📹 Long-form content (15-30 minute videos)
+- 🏭 Batch processing many videos
+- ⏱️ Time-sensitive workflows
+
+<Note>
+  All features work identically in both modes. The only difference is processing speed.
+</Note>
+
+## Alternative Solutions
+
+If CPU performance is insufficient:
+
+<Accordion title="Cloud Processing Options">
+  1. **AI Clipping API**: [muapi.ai/playground/ai-clipping](https://muapi.ai/playground/ai-clipping)
+     - No installation required
+     - Faster processing
+     - Better highlight selection algorithms
+
+  2. **Google Colab**: Run the tool on free GPU instances
+     - Requires adapting the code for notebook format
+     - Free tier has usage limits
+
+  3. **Cloud VM with GPU**: AWS, GCP, or Azure instances
+     - Rent by the hour
+     - Use the standard GPU installation
+</Accordion>

@@ -1,80 +1,271 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Generate your first YouTube Short in under 5 minutes
 ---
 
-## Get started in three steps
+## Prerequisites
 
-Get your documentation site running locally and make your first customization.
+Before you begin, ensure you have:
 
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+- Python 3.10+ installed
+- An OpenAI API key ([get one here](https://platform.openai.com/api-keys))
+- FFmpeg and ImageMagick installed on your system
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+For detailed installation instructions for all platforms, see the [Installation Guide](/installation).
 </Note>
+
+## Quick Setup
+
+<Steps>
+  <Step title="Clone the Repository">
+    ```bash
+    git clone https://github.com/SamurAIGPT/AI-Youtube-Shorts-Generator.git
+    cd AI-Youtube-Shorts-Generator
+    ```
+  </Step>
+
+  <Step title="Install System Dependencies">
+    <CodeGroup>
+    ```bash Ubuntu/Debian
+    sudo apt install -y ffmpeg libavdevice-dev libavfilter-dev \
+      libopus-dev libvpx-dev pkg-config libsrtp2-dev imagemagick
+    
+    # Fix ImageMagick security policy (required for subtitles)
+    sudo sed -i 's/rights="none" pattern="@\*"/rights="read|write" pattern="@*"/' /etc/ImageMagick-6/policy.xml
+    ```
+
+    ```bash macOS
+    brew install ffmpeg imagemagick
+    ```
+
+    ```powershell Windows
+    # Using Chocolatey
+    choco install ffmpeg imagemagick -y
+    ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Create Python Virtual Environment">
+    ```bash
+    python3.10 -m venv venv
+    source venv/bin/activate  # On Windows: .\venv\Scripts\Activate.ps1
+    ```
+  </Step>
+
+  <Step title="Install Python Dependencies">
+    ```bash
+    pip install -r requirements.txt
+    ```
+    
+    <Tip>
+    If you don't have an NVIDIA GPU, use `requirements-cpu.txt` instead, but install CPU PyTorch first:
+    ```bash
+    pip install torch --index-url https://download.pytorch.org/whl/cpu
+    pip install -r requirements-cpu.txt
+    ```
+    </Tip>
+  </Step>
+
+  <Step title="Configure OpenAI API Key">
+    Create a `.env` file in the project root:
+    ```bash
+    OPENAI_API=your_openai_api_key_here
+    ```
+  </Step>
+</Steps>
+
+## Generate Your First Short
+
+### Interactive Mode
+
+Run the tool and enter a YouTube URL when prompted:
+
+```bash
+./run.sh
+```
+
+You'll see:
+
+```
+Session ID: a1b2c3d4
+Enter YouTube video URL or local video file path:
+```
+
+Paste a YouTube URL (e.g., `https://youtu.be/dQw4w9WgXcQ`) and press Enter.
+
+### Command-Line Mode
+
+Pass the YouTube URL directly as an argument:
+
+```bash
+./run.sh "https://youtu.be/dQw4w9WgXcQ"
+```
+
+### Using Local Video Files
+
+Process a local video file instead:
+
+```bash
+./run.sh "/path/to/your/video.mp4"
+```
+
+## The Processing Workflow
+
+<Steps>
+  <Step title="Resolution Selection">
+    You'll see available video streams:
+    ```
+    Available video streams:
+      0. Resolution: 1080p, Size: 45.2 MB, Type: Adaptive
+      1. Resolution: 720p, Size: 28.1 MB, Type: Adaptive
+      2. Resolution: 480p, Size: 15.3 MB, Type: Adaptive
+
+    Select resolution number (0-2) or wait 5s for auto-select...
+    Auto-selecting highest quality in 5 seconds...
+    ```
+    
+    - Enter a number to select immediately
+    - Wait 5 seconds to auto-select highest quality
+  </Step>
+
+  <Step title="Transcription & AI Analysis">
+    The tool will:
+    - Extract and transcribe audio (~30s for 5-minute video with GPU)
+    - Analyze transcript with GPT-4o-mini to find engaging segments
+    
+    ```
+    Analyzing transcription to find best highlight...
+    ```
+  </Step>
+
+  <Step title="Review & Approve Selection">
+    The AI will present its selection:
+    ```
+    ============================================================
+    SELECTED SEGMENT DETAILS:
+    Time: 68s - 187s (119s duration)
+    ============================================================
+
+    Options:
+      [Enter/y] Approve and continue
+      [r] Regenerate selection
+      [n] Cancel
+
+    Auto-approving in 15 seconds if no input...
+    ```
+    
+    **Your options:**
+    - Press **Enter** or **y** to approve
+    - Press **r** to regenerate (can repeat multiple times)
+    - Press **n** to cancel
+    - Wait 15 seconds to auto-approve
+  </Step>
+
+  <Step title="Video Processing">
+    The tool will:
+    ```
+    Step 1/4: Extracting clip from original video...
+    Step 2/4: Cropping to vertical format (9:16)...
+    Step 3/4: Adding subtitles to video...
+    Step 4/4: Adding audio to final video...
+    ```
+  </Step>
+</Steps>
+
+## Expected Output
+
+When processing completes, you'll see:
+
+```
+============================================================
+✓ SUCCESS: my-awesome-video_a1b2c3d4_short.mp4 is ready!
+============================================================
+
+Cleaned up temporary files for session a1b2c3d4
+```
+
+Your vertical short will be saved in the project directory with:
+- **9:16 aspect ratio** (perfect for TikTok/Reels/Shorts)
+- **Stylized subtitles** with Franklin Gothic font
+- **Smart cropping** (face-centered or motion-tracked)
+- **Original audio** from selected segment
+
+## Automation for Batch Processing
+
+Skip interactive prompts for hands-free operation:
+
+```bash
+./run.sh --auto-approve "https://youtu.be/VIDEO_ID"
+```
+
+Process multiple videos from a file:
+
+```bash
+# Create urls.txt with one URL per line
+echo "https://youtu.be/VIDEO1" > urls.txt
+echo "https://youtu.be/VIDEO2" >> urls.txt
+echo "https://youtu.be/VIDEO3" >> urls.txt
+
+# Process all videos sequentially
+xargs -a urls.txt -I{} ./run.sh --auto-approve {}
+```
+
+<Tip>
+The `--auto-approve` flag automatically:
+- Selects highest video quality
+- Approves AI highlight selection after 15s timeout
+- Perfect for overnight batch processing
+</Tip>
+
+## Concurrent Processing
+
+Run multiple instances simultaneously (each gets a unique session ID):
+
+```bash
+./run.sh "https://youtu.be/VIDEO1" &
+./run.sh "https://youtu.be/VIDEO2" &
+./run.sh "/path/to/video3.mp4" &
+```
+
+Each instance operates independently with separate temporary files.
+
+## Troubleshooting Common Issues
+
+<Warning>
+**No subtitles appearing?**
+
+Ensure ImageMagick policy allows file operations:
+```bash
+grep 'pattern="@\*"' /etc/ImageMagick-6/policy.xml
+# Should show: rights="read|write"
+```
+
+If not, run:
+```bash
+sudo sed -i 's/rights="none" pattern="@\*"/rights="read|write" pattern="@*"/' /etc/ImageMagick-6/policy.xml
+```
+</Warning>
+
+<Warning>
+**CUDA/GPU errors?**
+
+The `run.sh` script automatically configures CUDA library paths. If you still encounter issues:
+```bash
+export LD_LIBRARY_PATH=$(find $(pwd)/venv/lib/python3.10/site-packages/nvidia -name "lib" -type d | paste -sd ":" -)
+```
+
+Or switch to CPU-only mode (see [Installation Guide](/installation)).
+</Warning>
+
+## What's Next?
+
+<CardGroup cols={2}>
+  <Card title="Installation Guide" icon="download" href="/installation">
+    Detailed setup instructions for all platforms including Docker
+  </Card>
+  
+  <Card title="Configuration" icon="gear" href="/guides/configuration">
+    Customize subtitle styling, AI prompts, and video quality settings
+  </Card>
+</CardGroup>

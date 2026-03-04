@@ -1,0 +1,296 @@
+---
+title: 'Subtitles'
+description: 'Add styled subtitles to videos with automatic timing and positioning'
+icon: 'closed-captioning'
+---
+
+The Subtitles component adds stylized, timed subtitles to videos using transcription data with automatic scaling and positioning.
+
+## Functions
+
+### add_subtitles_to_video
+
+Adds timed subtitles to a video based on transcription segments with dynamic sizing and styling.
+
+```python
+add_subtitles_to_video(input_video: str, output_video: str, 
+                       transcriptions: list, video_start_time: float = 0) -> None
+```
+
+<ParamField path="input_video" type="str" required>
+  Path to the input video file
+</ParamField>
+
+<ParamField path="output_video" type="str" required>
+  Path where the subtitled video will be saved
+</ParamField>
+
+<ParamField path="transcriptions" type="list" required>
+  List of transcription segments from `transcribeAudio()`, formatted as:
+  ```python
+  [[text, start_time, end_time], ...]
+  ```
+  Each segment contains:
+  - `text` (str): The subtitle text
+  - `start_time` (float): Start time in seconds
+  - `end_time` (float): End time in seconds
+</ParamField>
+
+<ParamField path="video_start_time" type="float" default="0">
+  Start time offset if the video was cropped from a longer video. Adjusts transcription times to match the video segment.
+</ParamField>
+
+#### Subtitle Styling
+
+<ParamField path="fontsize" type="int" default="dynamic">
+  Dynamically calculated as 6.5% of video height:
+  - 1080p video → 70px
+  - 720p video → 47px
+  - 480p video → 31px
+</ParamField>
+
+<ParamField path="color" type="str" default="#2699ff">
+  Bright blue color for high contrast on vertical videos
+</ParamField>
+
+<ParamField path="stroke_color" type="str" default="black">
+  Black outline for readability on any background
+</ParamField>
+
+<ParamField path="stroke_width" type="int" default="2">
+  2-pixel outline width for clear text edges
+</ParamField>
+
+<ParamField path="font" type="str" default="Franklin-Gothic">
+  Modern, readable sans-serif font
+</ParamField>
+
+#### Positioning
+
+- **Horizontal**: Centered with 50px margin on each side
+- **Vertical**: 100px from bottom of video
+- **Width**: Video width minus 100px (50px margin each side)
+- **Method**: Caption mode for automatic text wrapping
+
+<CodeGroup>
+```python Usage Example
+from Components.Transcription import transcribeAudio
+from Components.Subtitles import add_subtitles_to_video
+
+# Get transcriptions
+transcriptions = transcribeAudio("audio.wav")
+# Result: [["Hello world", 0.0, 2.5], ["Welcome", 2.5, 5.0], ...]
+
+# Add subtitles to full video
+add_subtitles_to_video(
+    input_video="video.mp4",
+    output_video="video_with_subs.mp4",
+    transcriptions=transcriptions,
+    video_start_time=0
+)
+
+# Output:
+# Adding 45 subtitle segments to video...
+# ✓ Subtitles added successfully -> video_with_subs.mp4
+```
+
+```python For Cropped Videos
+from Components.Edit import crop_video
+from Components.Subtitles import add_subtitles_to_video
+
+# Crop video from 30s to 150s
+crop_video("original.mp4", "short.mp4", start_time=30, end_time=150)
+
+# Add subtitles with time offset
+add_subtitles_to_video(
+    input_video="short.mp4",
+    output_video="short_with_subs.mp4",
+    transcriptions=transcriptions,
+    video_start_time=30  # Offset to match cropped segment
+)
+```
+
+```python From main.py
+# Create highlight clip and add subtitles
+start, stop = GetHighlight(TransText)  # e.g., 45s to 165s
+
+# Extract highlight clip
+crop_video(Vid, temp_clip, start, stop)
+
+# Crop to vertical
+crop_to_vertical(temp_clip, temp_cropped)
+
+# Add subtitles with correct timing
+print("Step 3/4: Adding subtitles to video...")
+add_subtitles_to_video(
+    temp_cropped, 
+    temp_subtitled, 
+    transcriptions, 
+    video_start_time=start  # Adjust for highlight start time
+)
+```
+</CodeGroup>
+
+## Features
+
+### Automatic Time Adjustment
+
+Filters and adjusts transcriptions to match video segment:
+
+```python
+for text, start, end in transcriptions:
+    # Adjust times relative to video start
+    adjusted_start = start - video_start_time
+    adjusted_end = end - video_start_time
+    
+    # Only include if within video duration
+    if adjusted_end > 0 and adjusted_start < video_duration:
+        adjusted_start = max(0, adjusted_start)
+        adjusted_end = min(video_duration, adjusted_end)
+        relevant_transcriptions.append([text.strip(), adjusted_start, adjusted_end])
+```
+
+**Example**: For a video cropped from 45s to 165s:
+- Original transcription: `["Hello", 50.0, 52.5]`
+- Adjusted for video: `["Hello", 5.0, 7.5]`
+
+### Dynamic Font Scaling
+
+Subtitles automatically scale to video resolution:
+
+```python
+# Font size is 6.5% of video height
+dynamic_fontsize = int(video.h * 0.065)
+
+# Examples:
+# 1080p (1920x1080) → 70px
+# 720p (1280x720)  → 47px
+# 480p (854x480)   → 31px
+```
+
+### Text Wrapping
+
+Automatic text wrapping for long subtitles:
+
+```python
+TextClip(
+    text,
+    method='caption',
+    size=(video.w - 100, None)  # Width constraint, auto height
+)
+```
+
+### Empty Segment Handling
+
+If no transcriptions match the video segment:
+
+```python
+if not relevant_transcriptions:
+    print("No transcriptions found for this video segment")
+    # Output video without subtitles
+    video.write_videofile(output_video, codec='libx264', audio_codec='aac')
+    return
+```
+
+## Output Specifications
+
+- **Video Codec**: libx264 (H.264)
+- **Audio Codec**: AAC
+- **FPS**: Preserves original video frame rate
+- **Preset**: medium (balanced speed/quality)
+- **Bitrate**: 3000k
+
+## Subtitle Appearance
+
+<Tabs>
+  <Tab title="Color Scheme">
+    - **Text Color**: `#2699ff` (bright blue)
+    - **Stroke Color**: `black`
+    - **Stroke Width**: 2px
+    - High contrast for readability on any background
+  </Tab>
+  
+  <Tab title="Typography">
+    - **Font**: Franklin-Gothic (sans-serif)
+    - **Size**: 6.5% of video height
+    - **Method**: Caption (auto-wrap)
+    - **Alignment**: Center-aligned
+  </Tab>
+  
+  <Tab title="Position">
+    - **Horizontal**: Center with 50px margins
+    - **Vertical**: 100px from bottom
+    - **Width**: Video width minus 100px
+    - Positioned above typical mobile UI elements
+  </Tab>
+</Tabs>
+
+## Example Output
+
+```python
+# Console output during processing
+Adding 24 subtitle segments to video...
+Moviepy - Building video __temp__.mp4.
+Moviepy - Writing video __temp__.mp4
+t: 100%|████████████████████| 3600/3600 [00:45<00:00, 79.41it/s]
+Moviepy - Done !
+✓ Subtitles added successfully -> output_with_subs.mp4
+```
+
+## Visual Example
+
+```
+┌─────────────────────┐
+│                     │
+│   Video Content     │
+│                     │
+│                     │
+├─────────────────────┤  ← 100px from bottom
+│  Today we'll be     │  ← Subtitle text
+│  discussing AI      │     (auto-wrapped)
+└─────────────────────┘
+   ↑50px margins↑
+```
+
+<Note>
+  The function automatically handles videos without audio by preserving the video track and adding a silent audio track if needed.
+</Note>
+
+<Warning>
+  Requires MoviePy and ImageMagick. The font 'Franklin-Gothic' must be available on the system, or MoviePy will fall back to a default font.
+</Warning>
+
+## Performance
+
+- **Processing Time**: ~30-60 seconds per minute of video
+- **Memory Usage**: Proportional to video resolution
+- **Text Rendering**: Uses ImageMagick for high-quality text
+
+## Error Handling
+
+```python
+try:
+    add_subtitles_to_video(input_video, output_video, transcriptions)
+except Exception as e:
+    print(f"Error adding subtitles: {e}")
+    # Common issues:
+    # - Missing ImageMagick installation
+    # - Font not found
+    # - Invalid transcription format
+    # - Video file read/write errors
+```
+
+## Font Installation
+
+If Franklin-Gothic is not available:
+
+```bash
+# Linux (Debian/Ubuntu)
+sudo apt-get install msttcorefonts
+
+# Mac
+brew install --cask font-franklin-gothic
+
+# Windows
+# Usually pre-installed, or download from Microsoft Typography
+```

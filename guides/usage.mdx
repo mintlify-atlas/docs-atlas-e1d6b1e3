@@ -1,0 +1,288 @@
+---
+title: 'Basic Usage'
+description: 'Learn how to run the AI YouTube Shorts Generator with different input sources and modes'
+icon: 'play'
+---
+
+## Running the Tool
+
+The AI YouTube Shorts Generator supports multiple input methods and execution modes to fit your workflow.
+
+### Interactive Mode
+
+Run without arguments to enter interactive mode:
+
+```bash
+./run.sh
+```
+
+You'll be prompted to enter a YouTube URL or local file path:
+
+```
+Enter YouTube video URL or local video file path: 
+```
+
+### Command-Line Mode
+
+Pass the video source directly as an argument:
+
+<CodeGroup>
+
+```bash YouTube URL
+./run.sh "https://youtu.be/VIDEO_ID"
+```
+
+```bash Local File
+./run.sh "/path/to/your/video.mp4"
+```
+
+</CodeGroup>
+
+<Note>
+The tool automatically detects whether the input is a local file path or YouTube URL by checking if the file exists on disk.
+</Note>
+
+## Resolution Selection
+
+When downloading from YouTube, you'll see available video streams with a 5-second auto-select timeout:
+
+```
+Available video streams:
+  0. Resolution: 1080p, Size: 45.2 MB, Type: Adaptive
+  1. Resolution: 720p, Size: 28.1 MB, Type: Adaptive
+  2. Resolution: 480p, Size: 15.3 MB, Type: Adaptive
+
+Select resolution number (0-2) or wait 5s for auto-select...
+Auto-selecting highest quality in 5 seconds...
+```
+
+<Steps>
+
+<Step title="Enter a number">
+Type `0`, `1`, or `2` to immediately select that resolution
+</Step>
+
+<Step title="Wait for auto-select">
+Wait 5 seconds to automatically select the highest quality (1080p)
+</Step>
+
+<Step title="Fallback behavior">
+Invalid input defaults to highest quality
+</Step>
+
+</Steps>
+
+<Info>
+The resolution selection uses a 5-second timeout implemented with `select.select()` in `Components/YoutubeDownloader.py:32`.
+</Info>
+
+## Interactive Approval Workflow
+
+After the AI selects a highlight segment, you can review and approve it:
+
+```
+============================================================
+SELECTED SEGMENT DETAILS:
+Time: 68s - 187s (119s duration)
+============================================================
+
+Options:
+  [Enter/y] Approve and continue
+  [r] Regenerate selection
+  [n] Cancel
+
+Auto-approving in 15 seconds if no input...
+```
+
+### Approval Options
+
+<Accordion title="Approve and Continue">
+Press **Enter** or **y** to accept the selected segment and proceed with video generation.
+</Accordion>
+
+<Accordion title="Regenerate Selection">
+Press **r** to have the AI select a different 2-minute segment. You can regenerate multiple times until you're satisfied.
+
+<Note>
+Regeneration calls the GPT-4o-mini API again with `temperature=1.0` for varied results.
+</Note>
+</Accordion>
+
+<Accordion title="Cancel Processing">
+Press **n** to cancel the entire operation and exit.
+</Accordion>
+
+<Accordion title="Auto-Approve (Default)">
+Wait 15 seconds without input to automatically approve. Perfect for automation and batch processing.
+
+<Info>
+The 15-second timeout is implemented with `select.select()` in `main.py:122`.
+</Info>
+</Accordion>
+
+## Processing Workflow
+
+The tool follows this step-by-step process:
+
+<Steps>
+
+<Step title="Download or Load Video">
+- YouTube videos are downloaded to the `videos/` directory
+- Local files are used directly from the provided path
+- Session ID is generated for tracking: `session_id = str(uuid.uuid4())[:8]`
+</Step>
+
+<Step title="Extract Audio">
+Converts video to WAV format for transcription:
+```
+audio_{session_id}.wav
+```
+</Step>
+
+<Step title="Transcribe with Whisper">
+GPU-accelerated transcription extracts timestamped text segments. Approximately 30 seconds for a 5-minute video.
+</Step>
+
+<Step title="AI Highlight Selection">
+GPT-4o-mini analyzes the transcription to find the most engaging 2-minute segment based on criteria:
+- Interesting or useful content
+- Surprising or controversial topics
+- Thought-provoking ideas
+- Complete sentences only
+</Step>
+
+<Step title="Interactive Approval">
+Review the selected segment with 15-second auto-approve timeout (skipped in batch mode).
+</Step>
+
+<Step title="Extract Clip">
+Creates temporary clip from the selected timeframe:
+```
+temp_clip_{session_id}.mp4
+```
+</Step>
+
+<Step title="Smart Cropping">
+Converts to 9:16 vertical format:
+- **Face videos**: Static face-centered crop (no jerky movement)
+- **Screen recordings**: Half-width display with smooth motion tracking (1 shift/second max)
+
+Output: `temp_cropped_{session_id}.mp4`
+</Step>
+
+<Step title="Add Subtitles">
+Burns Franklin Gothic captions with blue text (`#2699ff`) and black outline into the video:
+```
+temp_subtitled_{session_id}.mp4
+```
+
+Font size scales dynamically: `int(video.h * 0.065)`
+- 1080p → 70px
+- 720p → 47px
+</Step>
+
+<Step title="Combine Audio">
+Merges audio track with the final video using FFmpeg.
+</Step>
+
+<Step title="Cleanup">
+Automatically removes all temporary files:
+- `audio_{session_id}.wav`
+- `temp_clip_{session_id}.mp4`
+- `temp_cropped_{session_id}.mp4`
+- `temp_subtitled_{session_id}.mp4`
+</Step>
+
+</Steps>
+
+## Output Files
+
+Final videos are saved with slugified, descriptive filenames:
+
+```
+{video-title}_{session-id}_short.mp4
+```
+
+### Filename Components
+
+<Tabs>
+  <Tab title="Title Slugification">
+  The video title is cleaned and normalized:
+  - Converted to lowercase
+  - Spaces and underscores replaced with hyphens
+  - Invalid characters removed: `< > : " / \ | ? * [ ]`
+  - Multiple consecutive hyphens collapsed
+  - Trimmed to 80 characters max
+
+  **Example**: `"My Awesome Video!"` → `"my-awesome-video"`
+
+  Implementation in `main.py:46-58`:
+  ```python
+  def clean_filename(title):
+      cleaned = title.lower()
+      cleaned = re.sub(r'[<>:"/\\|?*\[\]]', '', cleaned)
+      cleaned = re.sub(r'[\s_]+', '-', cleaned)
+      cleaned = re.sub(r'-+', '-', cleaned)
+      cleaned = cleaned.strip('-')
+      return cleaned[:80]
+  ```
+  </Tab>
+
+  <Tab title="Session ID">
+  8-character unique identifier for traceability and concurrent execution:
+  ```python
+  session_id = str(uuid.uuid4())[:8]
+  ```
+
+  **Example**: `a1b2c3d4`
+
+  Ensures multiple instances can run simultaneously without file conflicts.
+  </Tab>
+
+  <Tab title="Output Resolution">
+  Final video maintains source height in 9:16 aspect ratio:
+  - **1080p source** → 607x1080 output
+  - **720p source** → 404x720 output
+  - **480p source** → 270x480 output
+
+  The width is calculated to maintain the 9:16 vertical format.
+  </Tab>
+</Tabs>
+
+### Example Outputs
+
+```
+how-to-build-a-saas-in-30-days_3f8a9b12_short.mp4
+ai-coding-tips-for-beginners_7c2d4e56_short.mp4
+my-startup-journey-lessons-learned_9a1b3c5d_short.mp4
+```
+
+<Info>
+All output files are saved in the current working directory unless running in Docker (then in `/app/output`).
+</Info>
+
+## Session IDs and Concurrent Execution
+
+Each run generates a unique session ID for isolated processing:
+
+```bash
+./run.sh "https://youtu.be/VIDEO1" &
+./run.sh "https://youtu.be/VIDEO2" &
+./run.sh "/path/to/video3.mp4" &
+```
+
+<Warning>
+All instances share the same `videos/` directory for downloaded content, but temporary files are isolated by session ID.
+</Warning>
+
+Benefits:
+- **No file conflicts**: Each session has unique temp files
+- **Parallel processing**: Run multiple videos simultaneously
+- **Output traceability**: Session ID in filename shows which run created each video
+- **Easy debugging**: Logs can be correlated by session ID
+
+See `main.py:13` for session ID generation:
+```python
+session_id = str(uuid.uuid4())[:8]
+print(f"Session ID: {session_id}")
+```

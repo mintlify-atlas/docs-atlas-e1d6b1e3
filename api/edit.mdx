@@ -1,0 +1,325 @@
+---
+title: 'Edit'
+description: 'Video editing utilities for audio extraction and time-based cropping'
+icon: 'scissors'
+---
+
+The Edit component provides core video editing functions for extracting audio and cropping videos by time ranges.
+
+## Functions
+
+### extractAudio
+
+Extracts the audio track from a video file and saves it as a WAV file.
+
+```python
+exractAudio(video_path: str, audio_path: str = "audio.wav") -> str | None
+```
+
+<ParamField path="video_path" type="str" required>
+  Path to the input video file
+</ParamField>
+
+<ParamField path="audio_path" type="str" default="audio.wav">
+  Path where the extracted audio will be saved (WAV format)
+</ParamField>
+
+<ResponseField name="audio_path" type="str | None">
+  Path to the extracted audio file on success, or `None` if extraction failed
+</ResponseField>
+
+#### Features
+
+- **Format**: Outputs WAV format for maximum compatibility
+- **Quality**: Preserves original audio quality
+- **Error Handling**: Returns `None` on failure with error message
+- **Automatic Cleanup**: Properly closes video clip after extraction
+
+<CodeGroup>
+```python Usage Example
+from Components.Edit import extractAudio
+
+# Extract audio with default filename
+audio_file = extractAudio("video.mp4")
+if audio_file:
+    print(f"Audio extracted to: {audio_file}")
+    # Output: Extracted audio to: audio.wav
+else:
+    print("Audio extraction failed")
+```
+
+```python Custom Output Path
+from Components.Edit import extractAudio
+
+# Extract audio to custom location
+audio_file = extractAudio(
+    video_path="videos/tutorial.mp4",
+    audio_path="audio/tutorial_audio.wav"
+)
+```
+
+```python From main.py
+# Generate unique audio filename for concurrent execution
+session_id = str(uuid.uuid4())[:8]
+audio_file = f"audio_{session_id}.wav"
+
+# Extract audio from video
+Audio = extractAudio(Vid, audio_file)
+if Audio:
+    # Use audio for transcription
+    transcriptions = transcribeAudio(Audio)
+```
+</CodeGroup>
+
+#### Error Handling
+
+```python
+audio_path = extractAudio("video.mp4")
+
+if audio_path is None:
+    print("Failed to extract audio")
+    # Possible causes:
+    # - Video file not found
+    # - Video has no audio track
+    # - Insufficient permissions
+    # - Corrupted video file
+```
+
+<Note>
+  The function automatically creates parent directories for the output path if they don't exist.
+</Note>
+
+---
+
+### crop_video
+
+Extracts a specific time segment from a video file.
+
+```python
+crop_video(input_file: str, output_file: str, 
+           start_time: float, end_time: float) -> None
+```
+
+<ParamField path="input_file" type="str" required>
+  Path to the input video file
+</ParamField>
+
+<ParamField path="output_file" type="str" required>
+  Path where the cropped video segment will be saved
+</ParamField>
+
+<ParamField path="start_time" type="float" required>
+  Start time of the segment in seconds (supports decimals)
+</ParamField>
+
+<ParamField path="end_time" type="float" required>
+  End time of the segment in seconds (supports decimals)
+</ParamField>
+
+#### Features
+
+- **Precise Timing**: Supports fractional seconds (e.g., 31.92)
+- **Safety Checks**: Automatically caps end time to video duration
+- **Quality Preservation**: Uses libx264 codec for high quality
+- **Audio Included**: Preserves audio track in the segment
+
+<CodeGroup>
+```python Usage Example
+from Components.Edit import crop_video
+
+# Extract 2-minute segment
+crop_video(
+    input_file="full_video.mp4",
+    output_file="highlight.mp4",
+    start_time=45.5,
+    end_time=165.5
+)
+
+# Output: Creates highlight.mp4 with 120-second segment
+```
+
+```python From main.py
+# Extract AI-selected highlight segment
+start, stop = GetHighlight(TransText)  # e.g., (45, 165)
+
+if start is not None and stop is not None:
+    print(f"Creating short video: {start}s - {stop}s ({stop-start}s duration)")
+    
+    # Extract highlight clip
+    print("Step 1/4: Extracting clip from original video...")
+    crop_video(Vid, temp_clip, start, stop)
+    
+    # Continue processing the clip
+    crop_to_vertical(temp_clip, temp_cropped)
+```
+
+```python Batch Cropping
+from Components.Edit import crop_video
+
+# Extract multiple segments
+segments = [
+    (0, 60, "intro.mp4"),
+    (60, 180, "main.mp4"),
+    (180, 240, "outro.mp4")
+]
+
+for start, end, output in segments:
+    crop_video("full_video.mp4", output, start, end)
+    print(f"Created {output}")
+```
+</CodeGroup>
+
+#### Automatic Duration Capping
+
+The function automatically handles invalid end times:
+
+```python
+with VideoFileClip(input_file) as video:
+    # Ensure end_time doesn't exceed video duration
+    max_time = video.duration - 0.1  # 0.1s buffer for safety
+    if end_time > max_time:
+        print(f"Warning: Requested end time ({end_time}s) exceeds " +
+              f"video duration ({video.duration}s). Capping to {max_time}s")
+        end_time = max_time
+    
+    cropped_video = video.subclip(start_time, end_time)
+```
+
+**Example**:
+- Video duration: 300 seconds
+- Requested: `crop_video("video.mp4", "out.mp4", 250, 350)`
+- Result: Crops from 250s to 299.9s (capped)
+- Console: `Warning: Requested end time (350s) exceeds video duration (300s). Capping to 299.9s`
+
+## Output Specifications
+
+### extractAudio
+
+- **Format**: WAV (Waveform Audio File Format)
+- **Channels**: Preserves original (mono/stereo)
+- **Sample Rate**: Preserves original
+- **Bit Depth**: Preserves original
+
+### crop_video
+
+- **Video Codec**: libx264 (H.264)
+- **Audio Codec**: Preserves original (typically AAC or MP3)
+- **FPS**: Preserves original frame rate
+- **Resolution**: Preserves original dimensions
+- **Quality**: High quality (lossless where possible)
+
+## Timing Examples
+
+```python
+# Precise decimal timing
+crop_video("video.mp4", "segment.mp4", 31.92, 49.2)
+
+# Whole seconds
+crop_video("video.mp4", "segment.mp4", 30, 60)
+
+# From start of video
+crop_video("video.mp4", "intro.mp4", 0, 10)
+
+# Last 30 seconds (if video is 300s long)
+crop_video("video.mp4", "outro.mp4", 270, 300)
+```
+
+## Use Cases
+
+<Tabs>
+  <Tab title="Highlight Extraction">
+    ```python
+    # Extract AI-selected highlight
+    transcriptions = transcribeAudio(audio)
+    TransText = "\n".join([f"{s} - {e}: {t}" 
+                           for t, s, e in transcriptions])
+    start, end = GetHighlight(TransText)
+    crop_video(video_path, "highlight.mp4", start, end)
+    ```
+  </Tab>
+  
+  <Tab title="Chapter Splitting">
+    ```python
+    # Split video into chapters
+    chapters = [
+        (0, 120, "chapter1.mp4"),
+        (120, 300, "chapter2.mp4"),
+        (300, 480, "chapter3.mp4")
+    ]
+    
+    for start, end, filename in chapters:
+        crop_video("full_video.mp4", filename, start, end)
+    ```
+  </Tab>
+  
+  <Tab title="Intro/Outro Removal">
+    ```python
+    # Remove 10s intro and 15s outro
+    from moviepy.editor import VideoFileClip
+    
+    with VideoFileClip("video.mp4") as video:
+        duration = video.duration
+    
+    crop_video("video.mp4", "main_content.mp4", 
+               10, duration - 15)
+    ```
+  </Tab>
+</Tabs>
+
+## Error Handling
+
+```python
+try:
+    audio = extractAudio("video.mp4")
+    if audio is None:
+        raise ValueError("Audio extraction failed")
+    
+    crop_video("video.mp4", "segment.mp4", 30, 90)
+except FileNotFoundError:
+    print("Video file not found")
+except Exception as e:
+    print(f"Error: {e}")
+```
+
+Common errors:
+- **File not found**: Invalid input path
+- **No audio track**: Video has no audio
+- **Invalid time range**: `start_time >= end_time`
+- **Corrupted video**: Unable to read video file
+
+<Warning>
+  Requires MoviePy package. Video cropping can be memory-intensive for large files or long segments.
+</Warning>
+
+## Performance Tips
+
+1. **Audio Extraction**: Fast (~5-10s for a 10-minute video)
+2. **Video Cropping**: Depends on segment length and codec
+   - 2-minute segment: ~30-60 seconds
+   - Longer segments: Proportionally longer
+3. **Memory Usage**: Loads entire segment into memory
+   - Recommend ≤5 minute segments at a time
+4. **Concurrent Processing**: Use unique filenames (see main.py example)
+
+## Concurrent Execution Support
+
+For processing multiple videos simultaneously:
+
+```python
+import uuid
+
+# Generate unique session ID
+session_id = str(uuid.uuid4())[:8]
+
+# Use unique filenames
+audio_file = f"audio_{session_id}.wav"
+temp_clip = f"clip_{session_id}.mp4"
+
+extractAudio(video_path, audio_file)
+crop_video(video_path, temp_clip, start, end)
+
+# Clean up when done
+import os
+os.remove(audio_file)
+os.remove(temp_clip)
+```

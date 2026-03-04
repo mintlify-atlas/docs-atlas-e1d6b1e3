@@ -1,0 +1,505 @@
+---
+title: 'Configuration'
+description: 'Environment variables, command-line options, and customization settings'
+icon: 'gear'
+---
+
+## Environment Variables
+
+The tool requires an OpenAI API key for AI-powered highlight selection.
+
+### Required Variables
+
+<Steps>
+
+<Step title="Create .env file">
+Create a `.env` file in the project root directory:
+
+```bash
+touch .env
+```
+</Step>
+
+<Step title="Add OpenAI API key">
+Add your API key to the file:
+
+```bash .env
+OPENAI_API=your_openai_api_key_here
+```
+</Step>
+
+<Step title="Verify configuration">
+The tool loads the environment variable using `python-dotenv`:
+
+```python Components/LanguageTasks.py:5-10
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+api_key = os.getenv("OPENAI_API")
+
+if not api_key:
+    raise ValueError("API key not found. Make sure it is defined in the .env file.")
+```
+
+You'll see an error immediately if the key is missing.
+</Step>
+
+</Steps>
+
+<Warning>
+Never commit your `.env` file to version control. Add it to `.gitignore` to protect your API key.
+</Warning>
+
+### Optional Variables (Docker)
+
+When running with Docker, additional environment variables are set automatically:
+
+```yaml docker-compose.yml
+environment:
+  - NVIDIA_VISIBLE_DEVICES=all
+  - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+```
+
+These enable GPU support for CUDA-accelerated Whisper transcription.
+
+## Command-Line Options
+
+The tool accepts two command-line arguments:
+
+### Video Source (Positional)
+
+```bash
+./run.sh [VIDEO_SOURCE]
+```
+
+<Tabs>
+  <Tab title="YouTube URL">
+  ```bash
+  ./run.sh "https://youtu.be/dQw4w9WgXcQ"
+  ./run.sh "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+  ```
+
+  Any valid YouTube URL format is supported by `pytubefix`.
+  </Tab>
+
+  <Tab title="Local File">
+  ```bash
+  ./run.sh "/home/user/videos/my-video.mp4"
+  ./run.sh "./local-content/presentation.mp4"
+  ./run.sh "~/Downloads/conference-talk.mov"
+  ```
+
+  Supports any video format that FFmpeg can process (MP4, MOV, AVI, MKV, etc.).
+  </Tab>
+
+  <Tab title="Interactive Mode">
+  ```bash
+  ./run.sh
+  ```
+
+  Omit the argument to be prompted for input:
+  ```
+  Enter YouTube video URL or local video file path: 
+  ```
+  </Tab>
+</Tabs>
+
+### Auto-Approve Flag
+
+Skip the interactive approval workflow for automation:
+
+```bash
+./run.sh --auto-approve "https://youtu.be/VIDEO_ID"
+```
+
+<Info>
+The `--auto-approve` flag must come **before** the video source argument.
+</Info>
+
+#### How It Works
+
+Implementation in `main.py:16-19`:
+
+```python
+auto_approve = "--auto-approve" in sys.argv
+if auto_approve:
+    sys.argv.remove("--auto-approve")
+```
+
+When enabled:
+- Skips the 15-second approval prompt
+- Automatically accepts the first AI-selected segment
+- Ideal for batch processing multiple videos
+- Shows abbreviated confirmation:
+
+```
+============================================================
+SELECTED SEGMENT: 68s - 187s (119s duration)
+============================================================
+Auto-approved (batch mode)
+```
+
+<Warning>
+Use `--auto-approve` carefully. You won't be able to review or regenerate selections. Consider testing without this flag first.
+</Warning>
+
+## AI Model Configuration
+
+The highlight selection uses GPT-4o-mini by default. You can customize the model and parameters in `Components/LanguageTasks.py`.
+
+### Model Selection
+
+Modify the `GetHighlight` function in `Components/LanguageTasks.py:56-60`:
+
+```python
+llm = ChatOpenAI(
+    model="gpt-4o-mini",  # Cost-effective model
+    temperature=1.0,
+    api_key = api_key
+)
+```
+
+<Tabs>
+  <Tab title="GPT-4o-mini (Default)">
+  ```python
+  model="gpt-4o-mini"
+  ```
+
+  - **Cost**: $0.15 per 1M input tokens, $0.60 per 1M output tokens
+  - **Speed**: Fast response times
+  - **Quality**: Good for most highlight selection tasks
+  </Tab>
+
+  <Tab title="GPT-4o">
+  ```python
+  model="gpt-4o"
+  ```
+
+  - **Cost**: $2.50 per 1M input tokens, $10.00 per 1M output tokens
+  - **Speed**: Moderate response times
+  - **Quality**: Best results for complex content analysis
+  </Tab>
+
+  <Tab title="GPT-4 Turbo">
+  ```python
+  model="gpt-4-turbo"
+  ```
+
+  - **Cost**: $10.00 per 1M input tokens, $30.00 per 1M output tokens
+  - **Speed**: Slower response times
+  - **Quality**: Highest quality reasoning
+  </Tab>
+</Tabs>
+
+### Temperature Control
+
+Adjust creativity vs. consistency:
+
+```python
+temperature=1.0  # Current setting
+```
+
+- **0.0-0.3**: Deterministic, consistent selections (same input → similar output)
+- **0.4-0.7**: Balanced creativity and reliability
+- **0.8-1.0**: More varied and creative selections (default)
+- **1.1-2.0**: Highly random, experimental
+
+<Note>
+Higher temperature values work well with the regeneration feature, providing different segments on each attempt.
+</Note>
+
+### Highlight Selection Criteria
+
+Edit the system prompt in `Components/LanguageTasks.py:27-43`:
+
+```python
+system = """
+The input contains a timestamped transcription of a video.
+Select a 2-minute segment from the transcription that contains something 
+interesting, useful, surprising, controversial, or thought-provoking.
+The selected text should contain only complete sentences.
+Do not cut the sentences in the middle.
+The selected text should form a complete thought.
+...
+"""
+```
+
+Customization examples:
+
+<CodeGroup>
+
+```python Educational Content
+system = """
+Select a 2-minute segment that contains clear explanations, 
+useful tips, or step-by-step instructions. Prioritize actionable
+content that viewers can immediately apply.
+"""
+```
+
+```python Entertainment
+system = """
+Select a 2-minute segment with the most entertaining, funny,
+or emotionally engaging moments. Look for stories, jokes, or
+dramatic reveals.
+"""
+```
+
+```python Controversial Takes
+system = """
+Select a 2-minute segment containing controversial opinions,
+debate topics, or thought-provoking perspectives that spark
+discussion.
+"""
+```
+
+</CodeGroup>
+
+## Output File Naming
+
+Output filenames are generated using slugification and session IDs.
+
+### Slugification Rules
+
+Implemented in `main.py:46-58`:
+
+<Steps>
+
+<Step title="Lowercase conversion">
+```python
+cleaned = title.lower()
+```
+Example: `"My Video"` → `"my video"`
+</Step>
+
+<Step title="Remove invalid characters">
+```python
+cleaned = re.sub(r'[<>:"/\\|?*\[\]]', '', cleaned)
+```
+Example: `"my video: tips"` → `"my video tips"`
+</Step>
+
+<Step title="Replace spaces with hyphens">
+```python
+cleaned = re.sub(r'[\s_]+', '-', cleaned)
+```
+Example: `"my video tips"` → `"my-video-tips"`
+</Step>
+
+<Step title="Collapse multiple hyphens">
+```python
+cleaned = re.sub(r'-+', '-', cleaned)
+```
+Example: `"my--video---tips"` → `"my-video-tips"`
+</Step>
+
+<Step title="Trim and limit length">
+```python
+cleaned = cleaned.strip('-')
+return cleaned[:80]
+```
+Removes leading/trailing hyphens and limits to 80 characters.
+</Step>
+
+</Steps>
+
+### Session ID Appending
+
+Final filename format in `main.py:164-165`:
+
+```python
+clean_title = clean_filename(video_title) if video_title else "output"
+final_output = f"{clean_title}_{session_id}_short.mp4"
+```
+
+Examples:
+
+```
+Original: "How to Build a SaaS in 30 Days"
+Cleaned:  "how-to-build-a-saas-in-30-days"
+Session:  "3f8a9b12"
+Final:    "how-to-build-a-saas-in-30-days_3f8a9b12_short.mp4"
+
+Original: "AI Coding Tips [2024] - Best Practices!!"
+Cleaned:  "ai-coding-tips-2024-best-practices"
+Session:  "7c2d4e56"
+Final:    "ai-coding-tips-2024-best-practices_7c2d4e56_short.mp4"
+```
+
+<Info>
+The session ID ensures unique filenames even when processing the same video multiple times concurrently.
+</Info>
+
+## Subtitle Styling
+
+Customize subtitle appearance by editing `Components/Subtitles.py`.
+
+### Font Settings
+
+Modify the `TextClip` creation in `Components/Subtitles.py:50-59`:
+
+```python
+txt_clip = TextClip(
+    text,
+    fontsize=dynamic_fontsize,
+    color='#2699ff',
+    stroke_color='black',
+    stroke_width=2,
+    font='Franklin-Gothic',
+    method='caption',
+    size=(video.w - 100, None)
+)
+```
+
+<Accordion title="Font Family">
+```python
+font='Franklin-Gothic'  # Current
+```
+
+Change to any system font. List available fonts:
+```bash
+convert -list font | grep -i "font:"
+```
+
+Common alternatives:
+- `'Arial'`
+- `'Helvetica-Bold'`
+- `'Impact'`
+- `'Montserrat-Bold'`
+</Accordion>
+
+<Accordion title="Font Size">
+```python
+dynamic_fontsize = int(video.h * 0.065)
+```
+
+Scales proportionally to video height:
+- 1080p → 70px
+- 720p → 47px
+- 480p → 31px
+
+Adjust the multiplier for larger/smaller text:
+```python
+dynamic_fontsize = int(video.h * 0.080)  # 23% larger
+dynamic_fontsize = int(video.h * 0.050)  # 23% smaller
+```
+</Accordion>
+
+<Accordion title="Text Color">
+```python
+color='#2699ff'  # Blue
+```
+
+Change to any hex color:
+- `'#FFFFFF'` - White
+- `'#FFFF00'` - Yellow  
+- `'#FF00FF'` - Magenta
+- `'#00FF00'` - Green
+</Accordion>
+
+<Accordion title="Stroke (Outline)">
+```python
+stroke_color='black'
+stroke_width=2
+```
+
+Adjust outline thickness and color for better readability:
+```python
+stroke_width=3  # Thicker outline
+stroke_color='#000000'  # Pure black
+```
+</Accordion>
+
+<Accordion title="Position">
+```python
+txt_clip = txt_clip.set_position(('center', video.h - txt_clip.h - 100))
+```
+
+Bottom-centered with 100px margin. Alternatives:
+```python
+# Higher position (150px from bottom)
+('center', video.h - txt_clip.h - 150)
+
+# Top position
+('center', 50)
+
+# Left-aligned bottom
+(50, video.h - txt_clip.h - 100)
+```
+</Accordion>
+
+### Video Encoding Settings
+
+Modify output quality in `Components/Subtitles.py:73-80`:
+
+```python
+final_video.write_videofile(
+    output_video,
+    codec='libx264',
+    audio_codec='aac',
+    fps=video.fps,
+    preset='medium',
+    bitrate='3000k'
+)
+```
+
+<Tabs>
+  <Tab title="Preset">
+  Controls encoding speed vs. file size:
+
+  ```python
+  preset='ultrafast'  # Fastest, largest files
+  preset='fast'       # Quick encoding
+  preset='medium'     # Balanced (default)
+  preset='slow'       # Better compression
+  preset='veryslow'   # Best compression, slowest
+  ```
+  </Tab>
+
+  <Tab title="Bitrate">
+  Controls video quality:
+
+  ```python
+  bitrate='3000k'  # Default (good quality)
+  bitrate='5000k'  # Higher quality, larger files
+  bitrate='2000k'  # Lower quality, smaller files
+  bitrate='8000k'  # Premium quality
+  ```
+  </Tab>
+
+  <Tab title="FPS">
+  Frame rate (defaults to source video FPS):
+
+  ```python
+  fps=video.fps    # Match source (default)
+  fps=30           # Fixed 30 FPS
+  fps=60           # Smooth 60 FPS
+  fps=24           # Cinematic 24 FPS
+  ```
+  </Tab>
+</Tabs>
+
+## Advanced Configuration
+
+### Motion Tracking
+
+For screen recordings without faces, adjust motion tracking in `Components/FaceCrop.py`:
+
+```python
+update_interval = int(fps)  # 1 shift per second
+smoothing = 0.90 * smoothed_x + 0.10 * target_x
+motion_threshold = 2.0
+```
+
+### Face Detection
+
+Tune sensitivity in `Components/FaceCrop.py`:
+
+```python
+minNeighbors=8      # Higher = fewer false positives
+minSize=(30, 30)    # Minimum face size in pixels
+```
+
+<Info>
+Restart the tool after making any configuration changes for them to take effect.
+</Info>

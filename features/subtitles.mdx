@@ -1,0 +1,362 @@
+---
+title: 'Subtitles'
+description: 'Auto-generated captions with customizable styling burned into the video'
+icon: 'closed-captioning'
+---
+
+## Overview
+
+The subtitle system automatically generates styled captions from transcription segments and burns them directly into the video. Subtitles are synchronized with audio timing and positioned for optimal mobile viewing.
+
+## How It Works
+
+The `add_subtitles_to_video` function in `Components/Subtitles.py:4` processes transcription segments and overlays them on the video:
+
+<Steps>
+  <Step title="Transcription Filtering">
+    Filters transcription segments to match the video timeframe (important for cropped clips).
+  </Step>
+  
+  <Step title="Text Clip Creation">
+    Creates styled TextClip objects for each transcription segment with timing information.
+  </Step>
+  
+  <Step title="Video Composition">
+    Composites all text clips onto the base video using MoviePy.
+  </Step>
+  
+  <Step title="Rendering">
+    Renders the final video with burned-in subtitles and audio.
+  </Step>
+</Steps>
+
+## Function Signature
+
+```python Components/Subtitles.py
+def add_subtitles_to_video(input_video, output_video, transcriptions, video_start_time=0):
+    """
+    Add subtitles to video based on transcription segments.
+    
+    Args:
+        input_video: Path to input video file
+        output_video: Path to output video file
+        transcriptions: List of [text, start, end] from transcribeAudio
+        video_start_time: Start time offset if video was cropped (default: 0)
+    """
+```
+
+<ParamField path="input_video" type="string" required>
+  Path to the input video file (typically the cropped video).
+</ParamField>
+
+<ParamField path="output_video" type="string" required>
+  Path where the final video with subtitles will be saved.
+</ParamField>
+
+<ParamField path="transcriptions" type="list" required>
+  List of `[text, start, end]` tuples from `transcribeAudio` function. Each tuple contains the text content and start/end timestamps in seconds.
+</ParamField>
+
+<ParamField path="video_start_time" type="float" default="0">
+  Start time offset in seconds. Used when the video has been cropped to adjust subtitle timing.
+</ParamField>
+
+## Transcription Filtering
+
+Subtitles are filtered to match the video duration:
+
+```python Components/Subtitles.py:17-28
+relevant_transcriptions = []
+for text, start, end in transcriptions:
+    # Adjust times relative to video start
+    adjusted_start = start - video_start_time
+    adjusted_end = end - video_start_time
+    
+    # Only include if within video duration
+    if adjusted_end > 0 and adjusted_start < video_duration:
+        adjusted_start = max(0, adjusted_start)
+        adjusted_end = min(video_duration, adjusted_end)
+        relevant_transcriptions.append([text.strip(), adjusted_start, adjusted_end])
+```
+
+<Note>
+  **Time Adjustment**: When a 2-minute clip is extracted from a longer video, `video_start_time` ensures subtitle timing matches the cropped segment.
+</Note>
+
+## Subtitle Styling
+
+### Font Configuration
+
+Subtitles use the Franklin Gothic font family:
+
+```python Components/Subtitles.py:56
+font='Franklin-Gothic'
+```
+
+<Tip>
+  To use a different font, change the `font` parameter to any system font. List available fonts with:
+  
+  ```bash
+  convert -list font | grep -i "font:"
+  ```
+</Tip>
+
+### Dynamic Font Sizing
+
+Font size scales proportionally to video height:
+
+```python Components/Subtitles.py:39-41
+# Scale font size proportionally to video height (~6.5% of height)
+# 1080p → 70px, 720p → 47px
+dynamic_fontsize = int(video.h * 0.065)
+```
+
+| Video Height | Font Size | Calculation |
+|--------------|-----------|-------------|
+| 1080p | 70px | 1080 × 0.065 |
+| 720p | 47px | 720 × 0.065 |
+| 480p | 31px | 480 × 0.065 |
+
+### Color and Stroke
+
+The subtitle style uses bright blue text with black outline:
+
+```python Components/Subtitles.py:50-56
+txt_clip = TextClip(
+    text,
+    fontsize=dynamic_fontsize,
+    color='#2699ff',
+    stroke_color='black',
+    stroke_width=2,
+    font='Franklin-Gothic',
+    method='caption',
+    size=(video.w - 100, None)  # Leave 50px margin on each side
+)
+```
+
+<ParamField path="color" type="string" default="#2699ff">
+  Text fill color in hex format. `#2699ff` is a bright blue that stands out on most backgrounds.
+</ParamField>
+
+<ParamField path="stroke_color" type="string" default="black">
+  Outline color around the text. Black provides maximum contrast.
+</ParamField>
+
+<ParamField path="stroke_width" type="int" default="2">
+  Outline thickness in pixels. 2px provides good readability without being too bold.
+</ParamField>
+
+<ParamField path="method" type="string" default="caption">
+  Text rendering method. `caption` enables word wrapping for long text.
+</ParamField>
+
+### Text Wrapping
+
+Subtitles automatically wrap to fit the video width:
+
+```python Components/Subtitles.py:58
+size=(video.w - 100, None)  # Leave 50px margin on each side
+```
+
+<Note>
+  The 100-pixel reduction (50px margin on each side) prevents subtitle text from touching the screen edges on mobile devices.
+</Note>
+
+## Positioning
+
+Subtitles are positioned at the bottom center of the video:
+
+```python Components/Subtitles.py:61-62
+# Position at bottom center
+txt_clip = txt_clip.set_position(('center', video.h - txt_clip.h - 100))
+```
+
+<ParamField path="horizontal" type="string" default="center">
+  Horizontal alignment. `center` ensures text is centered regardless of width.
+</ParamField>
+
+<ParamField path="vertical" type="int" default="video.h - txt_clip.h - 100">
+  Vertical position in pixels. Positioned 100px from the bottom of the video.
+</ParamField>
+
+<Tip>
+  The 100px bottom margin prevents subtitles from being obscured by mobile UI elements or platform watermarks.
+</Tip>
+
+## Timing Synchronization
+
+Each subtitle clip is precisely timed to match the transcription:
+
+```python Components/Subtitles.py:63-64
+txt_clip = txt_clip.set_start(start)
+txt_clip = txt_clip.set_duration(end - start)
+```
+
+<ParamField path="set_start" type="float">
+  Start time in seconds when the subtitle should appear.
+</ParamField>
+
+<ParamField path="set_duration" type="float">
+  Duration in seconds how long the subtitle should remain visible.
+</ParamField>
+
+### Example Timing
+
+```python
+# Transcription segment: ["Hello world", 5.2, 7.8]
+txt_clip.set_start(5.2)      # Appears at 5.2 seconds
+txt_clip.set_duration(2.6)   # Visible for 2.6 seconds (7.8 - 5.2)
+```
+
+## Video Composition
+
+All subtitle clips are composited onto the base video:
+
+```python Components/Subtitles.py:69-70
+print(f"Adding {len(text_clips)} subtitle segments to video...")
+final_video = CompositeVideoClip([video] + text_clips)
+```
+
+<Note>
+  **Layering Order**: The base video is the first layer, with all text clips rendered on top in order.
+</Note>
+
+## Output Encoding
+
+The final video is encoded with high-quality settings:
+
+```python Components/Subtitles.py:73-80
+final_video.write_videofile(
+    output_video,
+    codec='libx264',
+    audio_codec='aac',
+    fps=video.fps,
+    preset='medium',
+    bitrate='3000k'
+)
+```
+
+<ParamField path="codec" type="string" default="libx264">
+  H.264 video codec for wide compatibility across platforms.
+</ParamField>
+
+<ParamField path="audio_codec" type="string" default="aac">
+  AAC audio codec (industry standard for mobile platforms).
+</ParamField>
+
+<ParamField path="fps" type="float" default="video.fps">
+  Matches source video frame rate to prevent timing issues.
+</ParamField>
+
+<ParamField path="preset" type="string" default="medium">
+  Encoding speed preset. Options: `ultrafast`, `fast`, `medium`, `slow`, `veryslow`. Slower presets provide better compression.
+</ParamField>
+
+<ParamField path="bitrate" type="string" default="3000k">
+  Target video bitrate. 3000k (3 Mbps) provides high quality for 1080p vertical video.
+</ParamField>
+
+## Error Handling
+
+### No Transcriptions
+
+If no transcriptions match the video timeframe:
+
+```python Components/Subtitles.py:30-34
+if not relevant_transcriptions:
+    print("No transcriptions found for this video segment")
+    video.write_videofile(output_video, codec='libx264', audio_codec='aac')
+    video.close()
+    return
+```
+
+The video is still output but without subtitles.
+
+### Empty Text Handling
+
+```python Components/Subtitles.py:45-47
+text = text.strip()
+if not text:
+    continue
+```
+
+Empty transcription segments are automatically skipped.
+
+## Customizing Subtitle Style
+
+<Accordion title="Change Font and Size">
+  Edit `Components/Subtitles.py:52-56`:
+  
+  ```python
+  txt_clip = TextClip(
+      text,
+      fontsize=80,  # Fixed size instead of dynamic
+      font='Arial-Bold',  # Different font
+      # ... other parameters
+  )
+  ```
+</Accordion>
+
+<Accordion title="Modify Colors">
+  Edit `Components/Subtitles.py:53-55`:
+  
+  ```python
+  color='white',           # White text
+  stroke_color='#FF0000',  # Red outline
+  stroke_width=3,          # Thicker outline
+  ```
+</Accordion>
+
+<Accordion title="Change Position">
+  Edit `Components/Subtitles.py:62`:
+  
+  ```python
+  # Top-centered subtitles
+  txt_clip = txt_clip.set_position(('center', 100))
+  
+  # Bottom-left subtitles
+  txt_clip = txt_clip.set_position((50, video.h - txt_clip.h - 50))
+  
+  # Custom position (x, y)
+  txt_clip = txt_clip.set_position((100, 500))
+  ```
+</Accordion>
+
+<Accordion title="Adjust Margins">
+  Edit `Components/Subtitles.py:58,62`:
+  
+  ```python
+  # Wider margins (150px total)
+  size=(video.w - 150, None)
+  
+  # More bottom spacing (200px from bottom)
+  txt_clip = txt_clip.set_position(('center', video.h - txt_clip.h - 200))
+  ```
+</Accordion>
+
+## Performance
+
+- **Processing Speed**: ~0.5-2× realtime (depends on video length and subtitle count)
+- **Memory Usage**: ~500MB-2GB (depends on video resolution and duration)
+- **Rendering Time**: 
+  - 1-minute 1080p video: ~30-60 seconds
+  - 2-minute 720p video: ~20-40 seconds
+
+<Warning>
+  **ImageMagick Dependency**: Subtitle rendering requires ImageMagick. On Linux, you may need to adjust the security policy:
+  
+  ```bash
+  sudo sed -i 's/rights="none" pattern="@\*"/rights="read|write" pattern="@*"/' \
+    /etc/ImageMagick-6/policy.xml
+  ```
+</Warning>
+
+## Output Example
+
+```
+Adding 23 subtitle segments to video...
+Moviepy - Building video final_video_with_subtitles.mp4
+Moviepy - Writing video final_video_with_subtitles.mp4
+Moviepy - Done !
+✓ Subtitles added successfully -> final_video_with_subtitles.mp4
+```

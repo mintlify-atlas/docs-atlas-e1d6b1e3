@@ -1,0 +1,277 @@
+---
+title: 'Customization Guide'
+description: 'Customize subtitle styling, highlight selection, motion tracking, and video quality settings'
+---
+
+This guide covers how to customize various aspects of the AI YouTube Shorts Generator by modifying the source code.
+
+## Subtitle Styling
+
+Subtitles are configured in `Components/Subtitles.py`. The `TextClip` configuration (lines 50-59) controls all visual aspects of the captions.
+
+### Font Configuration
+
+<CodeGroup>
+```python Components/Subtitles.py:50-59
+txt_clip = TextClip(
+    text,
+    fontsize=dynamic_fontsize,
+    color='#2699ff',
+    stroke_color='black',
+    stroke_width=2,
+    font='Franklin-Gothic',
+    method='caption',
+    size=(video.w - 100, None)
+)
+```
+</CodeGroup>
+
+<Accordion title="Font Parameters">
+  - **font**: `'Franklin-Gothic'` - Change to any system font
+  - **fontsize**: Dynamic, calculated as `int(video.h * 0.065)` (~6.5% of video height)
+    - 1080p videos → 70px
+    - 720p videos → 47px
+  - **color**: `'#2699ff'` - Hex color code for text (default: blue)
+  - **stroke_color**: `'black'` - Outline color
+  - **stroke_width**: `2` - Outline thickness in pixels
+</Accordion>
+
+### List Available Fonts
+
+To see which fonts are available on your system:
+
+```bash
+convert -list font | grep -i "font:"
+```
+
+### Positioning and Margins
+
+Subtitle position is set at line 62:
+
+```python Components/Subtitles.py:62
+txt_clip = txt_clip.set_position(('center', video.h - txt_clip.h - 100))
+```
+
+<Info>
+  - **Horizontal**: `'center'` - Centered on screen
+  - **Vertical**: `video.h - txt_clip.h - 100` - 100px from bottom
+  - **Width margins**: `video.w - 100` - 50px margin on each side (line 58)
+</Info>
+
+## Highlight Selection Criteria
+
+The AI highlight selection logic is in `Components/LanguageTasks.py`. You can customize what the AI considers "interesting."
+
+### System Prompt
+
+Edit the `system` variable (lines 27-43) to change selection criteria:
+
+<CodeGroup>
+```python Components/LanguageTasks.py:27-43
+system = """
+The input contains a timestamped transcription of a video.
+Select a 2-minute segment from the transcription that contains something interesting, useful, surprising, controversial, or thought-provoking.
+The selected text should contain only complete sentences.
+Do not cut the sentences in the middle.
+The selected text should form a complete thought.
+Return a JSON object with the following structure:
+## Output 
+[{{
+    start: "Start time of the segment in seconds (number)",
+    content: "The transcribed text from the selected segment (clean text only, NO timestamps)",
+    end: "End time of the segment in seconds (number)"
+}}]
+
+## Input
+{Transcription}
+"""
+```
+</CodeGroup>
+
+<Tip>
+  Modify keywords like "interesting, useful, surprising, controversial, or thought-provoking" to focus on specific content types (e.g., "funny", "educational", "dramatic").
+</Tip>
+
+### Model and Temperature
+
+Configure the OpenAI model in the `GetHighlight` function (lines 56-60):
+
+```python Components/LanguageTasks.py:56-60
+llm = ChatOpenAI(
+    model="gpt-4o-mini",  # Cost-effective model
+    temperature=1.0,
+    api_key = api_key
+)
+```
+
+<Accordion title="Configuration Options">
+  - **model**: `"gpt-4o-mini"` - Available models:
+    - `gpt-4o-mini` - Fast and cost-effective (default)
+    - `gpt-4o` - More capable, higher cost
+    - `gpt-3.5-turbo` - Fastest, lowest cost
+  - **temperature**: `1.0` - Controls randomness (0.0 = deterministic, 2.0 = very creative)
+    - Lower (0.3-0.7): More consistent, predictable selections
+    - Higher (1.0-1.5): More varied, creative selections
+</Accordion>
+
+## Motion Tracking Behavior
+
+Motion tracking for screen recordings is configured in `Components/FaceCrop.py`.
+
+### Update Frequency
+
+Control how often the crop position updates (lines 99-101):
+
+```python Components/FaceCrop.py:99-101
+if use_motion_tracking:
+    update_interval = int(fps)  # Update once per second
+    print(f"Motion tracking: updating every {update_interval} frames (~1 shift/second)")
+```
+
+<Warning>
+  Default is `int(fps)` (1 update per second). Lower values create smoother but potentially jerkier tracking. Higher values are more stable but less responsive.
+</Warning>
+
+### Smoothing Factor
+
+Adjust position smoothing at line 136:
+
+```python Components/FaceCrop.py:136
+# Smooth tracking (90% previous, 10% new)
+smoothed_x = int(0.90 * smoothed_x + 0.10 * target_x)
+```
+
+<Accordion title="Smoothing Values">
+  - **0.90 / 0.10**: Default - Very smooth, gradual movement
+  - **0.80 / 0.20**: Faster response, slightly less smooth
+  - **0.95 / 0.05**: Extremely smooth, slower response
+  - Formula: `(previous_weight * old_position) + (new_weight * new_position)`
+</Accordion>
+
+### Motion Threshold
+
+Set minimum motion to trigger tracking (line 123):
+
+```python Components/FaceCrop.py:123
+motion_threshold = 2.0
+```
+
+<Info>
+  Higher values (3.0-5.0) ignore subtle movements. Lower values (1.0-2.0) track more sensitively. Default `2.0` works well for most screen recordings.
+</Info>
+
+## Face Detection Sensitivity
+
+Face detection parameters are in `Components/FaceCrop.py` at line 40:
+
+```python Components/FaceCrop.py:40
+faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=8, minSize=(30, 30))
+```
+
+<Steps>
+  <Step title="scaleFactor: 1.1">
+    Image scale reduction at each detection pass. Smaller values (1.05) detect more faces but slower. Larger values (1.3) are faster but may miss faces.
+  </Step>
+  <Step title="minNeighbors: 8">
+    Minimum neighbors required for detection. Higher values reduce false positives:
+    - 5-7: More sensitive, may detect non-faces
+    - 8-10: Balanced (default: 8)
+    - 11-15: Very strict, may miss some faces
+  </Step>
+  <Step title="minSize: (30, 30)">
+    Minimum face size in pixels. Increase for videos with larger faces or to ignore distant faces.
+  </Step>
+</Steps>
+
+## Video Quality Settings
+
+Video encoding parameters are set in two locations:
+
+### Subtitle Output Quality
+
+In `Components/Subtitles.py` (lines 73-80):
+
+```python Components/Subtitles.py:73-80
+final_video.write_videofile(
+    output_video,
+    codec='libx264',
+    audio_codec='aac',
+    fps=video.fps,
+    preset='medium',
+    bitrate='3000k'
+)
+```
+
+### Final Video Quality
+
+In `Components/FaceCrop.py` (line 194):
+
+```python Components/FaceCrop.py:194
+combined_clip.write_videofile(output_filename, codec='libx264', audio_codec='aac', fps=Fps, preset='medium', bitrate='3000k')
+```
+
+<Accordion title="Quality Parameters">
+  **Bitrate** (`bitrate='3000k'`):
+  - `2000k` - Lower quality, smaller files
+  - `3000k` - Balanced (default)
+  - `5000k` - High quality, larger files
+  - `8000k+` - Very high quality for 1080p
+
+  **Preset** (`preset='medium'`):
+  - `ultrafast` - Fastest encoding, largest files
+  - `fast` - Quick encoding, larger files  
+  - `medium` - Balanced (default)
+  - `slow` - Slower encoding, better compression
+  - `veryslow` - Best compression, slowest encoding
+
+  <Tip>
+    For batch processing, use `preset='fast'`. For final production, use `preset='slow'` with higher bitrate.
+  </Tip>
+</Accordion>
+
+## Example: Custom Configuration
+
+Here's a complete example of customizing multiple parameters:
+
+<Tabs>
+  <Tab title="Aggressive Tracking">
+    ```python Components/FaceCrop.py
+    # More responsive motion tracking
+    update_interval = int(fps / 2)  # Update twice per second
+    motion_threshold = 1.5  # Lower threshold
+    smoothed_x = int(0.70 * smoothed_x + 0.30 * target_x)  # 70/30 smoothing
+    ```
+  </Tab>
+  <Tab title="High Quality Output">
+    ```python Components/Subtitles.py
+    # Premium video quality
+    final_video.write_videofile(
+        output_video,
+        codec='libx264',
+        audio_codec='aac',
+        fps=video.fps,
+        preset='slow',
+        bitrate='5000k'
+    )
+    ```
+  </Tab>
+  <Tab title="Custom Subtitles">
+    ```python Components/Subtitles.py
+    # Yellow text with thick white outline
+    txt_clip = TextClip(
+        text,
+        fontsize=int(video.h * 0.08),  # Larger: 8% of height
+        color='#FFD700',  # Gold/yellow
+        stroke_color='white',
+        stroke_width=3,
+        font='Arial-Bold',
+        method='caption',
+        size=(video.w - 80, None)  # Narrower margins
+    )
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  After making changes to any Python files, restart the application for changes to take effect. No reinstallation of packages is needed.
+</Note>

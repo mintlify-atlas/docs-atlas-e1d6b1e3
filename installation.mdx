@@ -1,0 +1,572 @@
+---
+title: Installation
+description: Complete installation instructions for Ubuntu/Debian, macOS, Windows, and Docker
+---
+
+## Prerequisites
+
+Before installing, ensure you have:
+
+- **Python 3.10 or higher**
+- **OpenAI API key** ([get one here](https://platform.openai.com/api-keys))
+- **FFmpeg** with development headers
+- **ImageMagick** for subtitle rendering
+- **NVIDIA GPU with CUDA support** (optional but recommended for 5-10x faster transcription)
+
+<Note>
+GPU acceleration requires an NVIDIA GPU with CUDA support. For systems without a compatible GPU, see the [CPU-Only Installation](#cpu-only-installation) section.
+</Note>
+
+## Ubuntu/Debian Installation
+
+<Steps>
+  <Step title="Clone the Repository">
+    ```bash
+    git clone https://github.com/SamurAIGPT/AI-Youtube-Shorts-Generator.git
+    cd AI-Youtube-Shorts-Generator
+    ```
+  </Step>
+
+  <Step title="Install System Dependencies">
+    ```bash
+    sudo apt install -y ffmpeg libavdevice-dev libavfilter-dev \
+      libopus-dev libvpx-dev pkg-config libsrtp2-dev imagemagick
+    ```
+    
+    These packages provide:
+    - **ffmpeg**: Video/audio processing
+    - **libavdevice-dev, libavfilter-dev**: FFmpeg development libraries
+    - **libopus-dev, libvpx-dev**: Audio/video codec support
+    - **pkg-config**: Build configuration tool
+    - **libsrtp2-dev**: Secure RTP protocol support
+    - **imagemagick**: Subtitle rendering
+  </Step>
+
+  <Step title="Fix ImageMagick Security Policy">
+    ImageMagick has a restrictive security policy by default that prevents subtitle rendering:
+    
+    ```bash
+    sudo sed -i 's/rights="none" pattern="@\*"/rights="read|write" pattern="@*"/' /etc/ImageMagick-6/policy.xml
+    ```
+    
+    <Warning>
+    This step is **required** on Linux for subtitles to work. Without it, subtitle generation will fail silently.
+    </Warning>
+  </Step>
+
+  <Step title="Create Virtual Environment">
+    ```bash
+    python3.10 -m venv venv
+    source venv/bin/activate
+    ```
+  </Step>
+
+  <Step title="Install Python Dependencies">
+    ```bash
+    pip install -r requirements.txt
+    ```
+    
+    This installs key dependencies:
+    - **faster-whisper** (1.0.1): GPU-accelerated speech transcription
+    - **torch** (2.7.1): PyTorch with CUDA support
+    - **langchain-openai** (0.3.0): GPT-4o-mini integration
+    - **moviepy** (1.0.3): Video editing and manipulation
+    - **opencv-python** (4.8.1.78): Face detection and cropping
+    - **pytubefix** (9.1.1): YouTube video downloading
+  </Step>
+
+  <Step title="Configure Environment Variables">
+    Create a `.env` file in the project root:
+    
+    ```bash
+    OPENAI_API=your_openai_api_key_here
+    ```
+    
+    Replace `your_openai_api_key_here` with your actual OpenAI API key from [platform.openai.com/api-keys](https://platform.openai.com/api-keys).
+  </Step>
+
+  <Step title="Verify Installation">
+    Test that GPU acceleration is working:
+    
+    ```bash
+    python -c "import torch; print('CUDA available:', torch.cuda.is_available())"
+    ```
+    
+    Should output: `CUDA available: True`
+    
+    If it shows `False`, you may need to install CUDA drivers or use [CPU-only mode](#cpu-only-installation).
+  </Step>
+</Steps>
+
+## macOS Installation
+
+<Steps>
+  <Step title="Clone the Repository">
+    ```bash
+    git clone https://github.com/SamurAIGPT/AI-Youtube-Shorts-Generator.git
+    cd AI-Youtube-Shorts-Generator
+    ```
+  </Step>
+
+  <Step title="Install Homebrew (if not already installed)">
+    ```bash
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    ```
+  </Step>
+
+  <Step title="Install System Dependencies">
+    ```bash
+    brew install ffmpeg imagemagick
+    ```
+  </Step>
+
+  <Step title="Create Virtual Environment">
+    ```bash
+    python3.10 -m venv venv
+    source venv/bin/activate
+    ```
+  </Step>
+
+  <Step title="Install Python Dependencies">
+    ```bash
+    pip install -r requirements.txt
+    ```
+    
+    <Note>
+    macOS does not support CUDA, so transcription will run on CPU. For faster processing, consider using a cloud GPU instance or the [AI Clipping API](https://muapi.ai/playground/ai-clipping).
+    </Note>
+  </Step>
+
+  <Step title="Configure Environment Variables">
+    Create a `.env` file:
+    
+    ```bash
+    echo "OPENAI_API=your_openai_api_key_here" > .env
+    ```
+  </Step>
+</Steps>
+
+## Windows Installation
+
+<Steps>
+  <Step title="Clone the Repository">
+    ```powershell
+    git clone https://github.com/SamurAIGPT/AI-Youtube-Shorts-Generator.git
+    cd AI-Youtube-Shorts-Generator
+    ```
+  </Step>
+
+  <Step title="Install FFmpeg">
+    <CodeGroup>
+    ```powershell Chocolatey (Recommended)
+    # Run PowerShell as Administrator
+    choco install ffmpeg -y
+    ```
+
+    ```powershell Scoop
+    scoop install ffmpeg
+    ```
+
+    ```powershell Manual Installation
+    # 1. Download from https://ffmpeg.org/download.html
+    # 2. Extract to C:\ffmpeg
+    # 3. Add C:\ffmpeg\bin to System PATH
+    ```
+    </CodeGroup>
+  </Step>
+
+  <Step title="Install ImageMagick">
+    ```powershell
+    choco install imagemagick -y
+    ```
+    
+    After installation, configure the security policy:
+    
+    1. Open `C:\Program Files\ImageMagick-7.x.x-Q16-HDRI\config\policy.xml`
+    2. Find: `<policy domain="path" rights="none" pattern="@*"/>`
+    3. Change to: `<policy domain="path" rights="read|write" pattern="@*"/>`
+    4. Save the file
+  </Step>
+
+  <Step title="Create Virtual Environment">
+    ```powershell
+    python -m venv venv
+    .\venv\Scripts\Activate.ps1
+    ```
+    
+    <Warning>
+    If you get an execution policy error, run:
+    ```powershell
+    Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+    ```
+    </Warning>
+  </Step>
+
+  <Step title="Install Python Dependencies">
+    ```powershell
+    pip install -r requirements.txt
+    ```
+  </Step>
+
+  <Step title="Configure Environment Variables">
+    Create a `.env` file in the project root:
+    
+    ```powershell
+    echo "OPENAI_API=your_openai_api_key_here" > .env
+    ```
+  </Step>
+
+  <Step title="Run the Tool">
+    On Windows, run Python directly (instead of using `run.sh`):
+    
+    ```powershell
+    python main.py "https://youtu.be/VIDEO_ID"
+    ```
+    
+    Or for interactive mode:
+    
+    ```powershell
+    python main.py
+    ```
+  </Step>
+</Steps>
+
+## CPU-Only Installation
+
+If you don't have an NVIDIA GPU, you can run the tool in CPU-only mode. Transcription will be significantly slower (5-10x), but all features remain functional.
+
+### Ubuntu/Debian (CPU)
+
+<Steps>
+  <Step title="Install System Dependencies">
+    ```bash
+    sudo apt install -y ffmpeg libavdevice-dev libavfilter-dev \
+      libopus-dev libvpx-dev pkg-config libsrtp2-dev imagemagick
+    
+    sudo sed -i 's/rights="none" pattern="@\*"/rights="read|write" pattern="@*"/' /etc/ImageMagick-6/policy.xml
+    ```
+  </Step>
+
+  <Step title="Create Virtual Environment">
+    ```bash
+    python3.10 -m venv venv
+    source venv/bin/activate
+    ```
+  </Step>
+
+  <Step title="Install CPU PyTorch First">
+    ```bash
+    pip install torch --index-url https://download.pytorch.org/whl/cpu
+    ```
+    
+    <Warning>
+    **Important:** Install CPU PyTorch **before** installing other dependencies to avoid downloading CUDA packages.
+    </Warning>
+  </Step>
+
+  <Step title="Install Other Dependencies">
+    ```bash
+    pip install -r requirements-cpu.txt
+    ```
+    
+    <Note>
+    If `requirements-cpu.txt` doesn't exist, use `requirements.txt` but skip CUDA-related packages.
+    </Note>
+  </Step>
+
+  <Step title="Verify CPU Mode">
+    ```bash
+    python -c "import torch; print('CUDA available:', torch.cuda.is_available())"
+    ```
+    
+    Should output: `CUDA available: False`
+  </Step>
+</Steps>
+
+### Windows (CPU)
+
+<Steps>
+  <Step title="Install System Dependencies">
+    ```powershell
+    choco install ffmpeg imagemagick -y
+    ```
+    
+    Configure ImageMagick policy as described in the [Windows Installation](#windows-installation) section.
+  </Step>
+
+  <Step title="Create Virtual Environment">
+    ```powershell
+    python -m venv venv
+    .\venv\Scripts\Activate.ps1
+    ```
+  </Step>
+
+  <Step title="Install CPU PyTorch">
+    ```powershell
+    pip install torch --index-url https://download.pytorch.org/whl/cpu
+    ```
+  </Step>
+
+  <Step title="Install Other Dependencies">
+    ```powershell
+    pip install -r requirements-cpu.txt
+    ```
+  </Step>
+</Steps>
+
+### macOS (CPU)
+
+macOS installation is CPU-only by default. Follow the standard [macOS installation](#macos-installation) instructions.
+
+<Tip>
+**Performance Note:** CPU transcription of a 5-minute video may take 2-5 minutes compared to ~30 seconds with GPU acceleration.
+</Tip>
+
+## Docker Installation
+
+Docker provides a containerized environment with all dependencies pre-configured, including GPU support.
+
+### Prerequisites
+
+- Docker 20.10+ installed ([get Docker](https://docs.docker.com/get-docker/))
+- Docker Compose 1.29+ ([get Docker Compose](https://docs.docker.com/compose/install/))
+- **For GPU support:** NVIDIA Docker runtime ([installation guide](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html))
+
+### Using Docker Compose (Recommended)
+
+<Steps>
+  <Step title="Clone the Repository">
+    ```bash
+    git clone https://github.com/SamurAIGPT/AI-Youtube-Shorts-Generator.git
+    cd AI-Youtube-Shorts-Generator
+    ```
+  </Step>
+
+  <Step title="Configure Environment Variables">
+    Create a `.env` file:
+    
+    ```bash
+    OPENAI_API=your_openai_api_key_here
+    ```
+  </Step>
+
+  <Step title="Build and Run Container">
+    ```bash
+    docker-compose up --build
+    ```
+    
+    The container configuration:
+    - Base image: `nvidia/cuda:12.1.0-cudnn8-runtime-ubuntu22.04`
+    - GPU support: Enabled via NVIDIA runtime
+    - Mounts: `.env` file, `./videos` (input), `./output` (output)
+    - Interactive mode: Enabled for URL input
+  </Step>
+
+  <Step title="Process Videos">
+    **Interactive mode:**
+    ```bash
+    docker-compose run youtube-shorts-generator ./run.sh
+    ```
+    
+    **With YouTube URL:**
+    ```bash
+    docker-compose run youtube-shorts-generator ./run.sh "https://youtu.be/VIDEO_ID"
+    ```
+    
+    **With local file:**
+    ```bash
+    # Place video in ./videos directory
+    docker-compose run youtube-shorts-generator ./run.sh "/app/videos/video.mp4"
+    ```
+  </Step>
+</Steps>
+
+### Manual Docker Build
+
+<Steps>
+  <Step title="Build Image">
+    ```bash
+    docker build -t ai-shorts-generator .
+    ```
+  </Step>
+
+  <Step title="Run Container">
+    ```bash
+    docker run --gpus all \
+      -v $(pwd)/.env:/app/.env \
+      -v $(pwd)/videos:/app/videos \
+      -v $(pwd)/output:/app/output \
+      -it ai-shorts-generator ./run.sh "https://youtu.be/VIDEO_ID"
+    ```
+    
+    **Flags explained:**
+    - `--gpus all`: Enable GPU acceleration
+    - `-v $(pwd)/.env:/app/.env`: Mount environment variables
+    - `-v $(pwd)/videos:/app/videos`: Mount input videos
+    - `-v $(pwd)/output:/app/output`: Mount output directory
+    - `-it`: Interactive terminal for prompts
+  </Step>
+</Steps>
+
+### CPU-Only Docker
+
+Remove GPU-specific configuration:
+
+```bash
+docker run \
+  -v $(pwd)/.env:/app/.env \
+  -v $(pwd)/videos:/app/videos \
+  -v $(pwd)/output:/app/output \
+  -it ai-shorts-generator ./run.sh
+```
+
+## Environment Variables
+
+The tool requires the following environment variable:
+
+| Variable | Required | Description | Example |
+|----------|----------|-------------|----------|
+| `OPENAI_API` | Yes | OpenAI API key for GPT-4o-mini | `sk-proj-...` |
+
+**Configuration file:** `.env` in project root
+
+```bash
+OPENAI_API=sk-proj-1234567890abcdefghijklmnopqrstuvwxyz
+```
+
+<Warning>
+**Security:** Never commit your `.env` file to version control. Add it to `.gitignore`.
+</Warning>
+
+## Verifying Your Installation
+
+Test your installation with a short video:
+
+```bash
+./run.sh "https://youtu.be/dQw4w9WgXcQ"
+```
+
+Successful installation will:
+1. Download the video
+2. Extract and transcribe audio
+3. Analyze transcript with GPT-4o-mini
+4. Present highlight selection for approval
+5. Process and output vertical short
+
+## Troubleshooting
+
+### CUDA/GPU Issues
+
+**Problem:** `torch.cuda.is_available()` returns `False`
+
+**Solutions:**
+1. Verify NVIDIA drivers are installed:
+   ```bash
+   nvidia-smi
+   ```
+
+2. Check CUDA library paths:
+   ```bash
+   export LD_LIBRARY_PATH=$(find $(pwd)/venv/lib/python3.10/site-packages/nvidia -name "lib" -type d | paste -sd ":" -)
+   ```
+   
+   The `run.sh` script handles this automatically.
+
+3. Reinstall PyTorch with CUDA:
+   ```bash
+   pip uninstall torch
+   pip install torch --index-url https://download.pytorch.org/whl/cu121
+   ```
+
+### ImageMagick Subtitle Issues
+
+**Problem:** No subtitles appear in output video
+
+**Solution:** Check ImageMagick policy:
+```bash
+grep 'pattern="@\*"' /etc/ImageMagick-6/policy.xml
+```
+
+Should show: `rights="read|write"`
+
+If not:
+```bash
+sudo sed -i 's/rights="none" pattern="@\*"/rights="read|write" pattern="@*"/' /etc/ImageMagick-6/policy.xml
+```
+
+### Face Detection Issues
+
+**Problem:** Cropping doesn't center on faces
+
+**Causes:**
+- Video needs visible faces in first 30 frames
+- Low-resolution videos have less reliable detection
+- For screen recordings, motion tracking applies automatically
+
+**Solution:** Adjust face detection sensitivity in `Components/FaceCrop.py:detectMultiScale`:
+```python
+minNeighbors=8  # Higher = fewer false positives
+minSize=(30, 30)  # Minimum face size in pixels
+```
+
+### OpenAI API Issues
+
+**Problem:** `ERROR: Failed to get highlight from LLM`
+
+**Causes:**
+- Invalid or missing API key
+- Rate limiting
+- Network connectivity issues
+- Insufficient API credits
+
+**Solutions:**
+1. Verify API key in `.env` file
+2. Check API usage at [platform.openai.com/usage](https://platform.openai.com/usage)
+3. Test API key:
+   ```bash
+   curl https://api.openai.com/v1/models \
+     -H "Authorization: Bearer $OPENAI_API"
+   ```
+
+### FFmpeg Not Found
+
+**Problem:** `ffmpeg: command not found`
+
+**Solutions:**
+- **Ubuntu/Debian:** `sudo apt install ffmpeg`
+- **macOS:** `brew install ffmpeg`
+- **Windows:** Add FFmpeg to system PATH
+
+### Python Version Issues
+
+**Problem:** Module compatibility errors
+
+**Solution:** Ensure Python 3.10+ is installed:
+```bash
+python --version  # Should show 3.10.x or higher
+```
+
+Install Python 3.10:
+- **Ubuntu:** `sudo apt install python3.10 python3.10-venv`
+- **macOS:** `brew install python@3.10`
+- **Windows:** Download from [python.org](https://www.python.org/downloads/)
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart Guide" icon="rocket" href="/quickstart">
+    Generate your first short in under 5 minutes
+  </Card>
+  
+  <Card title="Usage Examples" icon="terminal" href="/guides/usage">
+    Learn CLI commands and automation techniques
+  </Card>
+  
+  <Card title="Configuration" icon="sliders" href="/guides/configuration">
+    Customize subtitle styling, AI prompts, and video settings
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api">
+    Explore the codebase and component architecture
+  </Card>
+</CardGroup>

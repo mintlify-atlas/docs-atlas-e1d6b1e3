@@ -1,0 +1,345 @@
+---
+title: 'Smart Cropping'
+description: 'Adaptive vertical cropping with face detection and motion tracking for optimal mobile viewing'
+icon: 'crop'
+---
+
+## Overview
+
+The Smart Cropping system automatically converts horizontal videos to vertical 9:16 format optimized for mobile platforms. It uses two distinct algorithms:
+
+- **Face Detection Mode**: Static face-centered crop for videos with visible faces
+- **Motion Tracking Mode**: Dynamic tracking for screen recordings and faceless content
+
+## How It Works
+
+The `crop_to_vertical` function in `Components/FaceCrop.py:7` analyzes the first 30 frames to determine the optimal cropping strategy:
+
+<Steps>
+  <Step title="Initial Analysis">
+    Scans the first 30 frames using Haar Cascade face detection to identify if faces are present.
+  </Step>
+  
+  <Step title="Mode Selection">
+    - **Faces detected**: Static face-centered crop
+    - **No faces detected**: Motion-tracked crop for screen recordings
+  </Step>
+  
+  <Step title="Aspect Ratio Calculation">
+    Calculates 9:16 vertical dimensions based on source video height.
+  </Step>
+  
+  <Step title="Frame Processing">
+    Processes each frame with the selected cropping algorithm.
+  </Step>
+</Steps>
+
+## Function Signature
+
+```python Components/FaceCrop.py
+def crop_to_vertical(input_video_path, output_video_path):
+    """
+    Crop video to vertical 9:16 format with static face detection (no tracking)
+    
+    Args:
+        input_video_path: Path to source video file
+        output_video_path: Path for cropped output video
+    """
+```
+
+## Face Detection Algorithm
+
+### Haar Cascade Configuration
+
+The system uses OpenCV's Haar Cascade classifier for face detection:
+
+```python Components/FaceCrop.py:9
+face_cascade = cv2.CascadeClassifier(
+    cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+)
+```
+
+### Detection Parameters
+
+```python Components/FaceCrop.py:40
+faces = face_cascade.detectMultiScale(
+    gray, 
+    scaleFactor=1.1, 
+    minNeighbors=8, 
+    minSize=(30, 30)
+)
+```
+
+<ParamField path="scaleFactor" type="float" default="1.1">
+  Image pyramid scale factor. Lower values increase detection sensitivity but may cause false positives.
+</ParamField>
+
+<ParamField path="minNeighbors" type="int" default="8">
+  Minimum neighbors required for valid detection. Higher values reduce false positives but may miss faces.
+</ParamField>
+
+<ParamField path="minSize" type="tuple" default="(30, 30)">
+  Minimum face size in pixels. Smaller values detect distant faces but increase false positives.
+</ParamField>
+
+### Face Position Calculation
+
+When faces are detected, the algorithm calculates a static crop position:
+
+```python Components/FaceCrop.py:41-56
+if len(faces) > 0:
+    # Get largest face
+    best_face = max(faces, key=lambda f: f[2] * f[3])
+    x, y, w, h = best_face
+    face_center_x = x + w // 2
+    face_positions.append(face_center_x)
+
+# Use median face position for stability
+avg_face_x = int(sorted(face_positions)[len(face_positions) // 2])
+# Offset slightly to the right to prevent right-side cutoff
+avg_face_x += 60
+x_start = max(0, min(avg_face_x - vertical_width // 2, 
+                      original_width - vertical_width))
+```
+
+<Note>
+  **Median Filtering**: Uses the median face position across 30 frames (not mean) to avoid outliers from false detections.
+</Note>
+
+<Tip>
+  The 60-pixel rightward offset prevents right-side cutoff issues common with centered face crops.
+</Tip>
+
+## Motion Tracking Algorithm
+
+When no faces are detected, the system uses optical flow-based motion tracking:
+
+### Scaling Configuration
+
+```python Components/FaceCrop.py:69-82
+# Scale so original width fits into vertical_width
+target_display_width = original_width * 0.67
+scale = vertical_width / target_display_width
+scaled_width = int(original_width * scale)
+scaled_height = int(original_height * scale)
+
+# If scaled height exceeds vertical height, adjust scale
+if scaled_height > vertical_height:
+    scale = vertical_height / original_height
+    scaled_width = int(original_width * scale)
+    scaled_height = int(original_height * scale)
+```
+
+<ParamField path="target_display_width" type="float" default="original_width * 0.67">
+  Target width for screen recording display. 0.67 shows approximately two-thirds of the original width.
+</ParamField>
+
+### Update Frequency
+
+Motion tracking updates are rate-limited for smooth transitions:
+
+```python Components/FaceCrop.py:99-101
+update_interval = int(fps)  # Update once per second
+print(f"Motion tracking: updating every {update_interval} frames (~1 shift/second)")
+```
+
+<Warning>
+  Updating more frequently than 1 shift/second creates jerky, nauseating movement. The 1-second interval provides smooth, natural tracking.
+</Warning>
+
+### Optical Flow Calculation
+
+The Farneback optical flow algorithm tracks motion between frames:
+
+```python Components/FaceCrop.py:117-119
+flow = cv2.calcOpticalFlowFarneback(
+    prev_gray, curr_gray, None,
+    0.5, 3, 15, 3, 5, 1.2, 0
+)
+```
+
+<Accordion title="Farneback Parameters Explained">
+  | Parameter | Value | Description |
+  |-----------|-------|-------------|
+  | `pyr_scale` | 0.5 | Pyramid scale (0.5 = 2-level pyramid) |
+  | `levels` | 3 | Number of pyramid levels |
+  | `winsize` | 15 | Averaging window size |
+  | `iterations` | 3 | Iterations at each pyramid level |
+  | `poly_n` | 5 | Neighborhood size for polynomial expansion |
+  | `poly_sigma` | 1.2 | Standard deviation for Gaussian smoothing |
+  | `flags` | 0 | Operation flags |
+</Accordion>
+
+### Motion Filtering
+
+Only significant motion affects crop position:
+
+```python Components/FaceCrop.py:120-131
+magnitude = np.sqrt(flow[..., 0]**2 + flow[..., 1]**2)
+
+# Focus on significant motion
+motion_threshold = 2.0
+significant_motion = magnitude > motion_threshold
+
+if np.any(significant_motion):
+    # Weight columns by motion
+    col_motion = np.sum(magnitude * significant_motion, axis=0)
+    
+    if np.sum(col_motion) > 0:
+        motion_x = int(np.average(np.arange(scaled_width), weights=col_motion))
+```
+
+<ParamField path="motion_threshold" type="float" default="2.0">
+  Minimum pixel movement to be considered significant motion. Lower values make tracking more sensitive.
+</ParamField>
+
+### Smoothing Parameters
+
+Smoothing prevents abrupt jumps in crop position:
+
+```python Components/FaceCrop.py:133-136
+# Target x position to center motion in the crop
+target_x = max(0, min(motion_x - vertical_width // 2, 
+                      scaled_width - vertical_width))
+
+# Smooth tracking (90% previous, 10% new)
+smoothed_x = int(0.90 * smoothed_x + 0.10 * target_x)
+```
+
+<ParamField path="smoothing_factor" type="float" default="0.90">
+  Exponential smoothing weight. 0.90 means 90% previous position, 10% new target. Higher values = smoother but slower response.
+</ParamField>
+
+<Note>
+  **Exponential Smoothing**: This creates a natural "camera follow" effect similar to professional video editing, avoiding jarring jumps.
+</Note>
+
+## Aspect Ratio Calculation
+
+The output dimensions maintain source video quality:
+
+```python Components/FaceCrop.py:21-26
+vertical_height = int(original_height)
+vertical_width = int(vertical_height * 9 / 16)
+
+# Ensure dimensions are even (required by many codecs)
+vertical_width = vertical_width - (vertical_width % 2)
+vertical_height = vertical_height - (vertical_height % 2)
+```
+
+### Example Dimensions
+
+| Source Resolution | Output Resolution | Aspect Ratio |
+|-------------------|-------------------|-------------|
+| 1920×1080 (1080p) | 607×1080 | 9:16 |
+| 1280×720 (720p) | 405×720 | 9:16 |
+| 854×480 (480p) | 270×480 | 9:16 |
+
+<Tip>
+  Dimensions are rounded to even numbers to ensure compatibility with H.264 and other codecs that require even-width/height.
+</Tip>
+
+## Video Codec Configuration
+
+The output video uses platform-specific codecs:
+
+```python Components/FaceCrop.py:86-89
+import platform
+if platform.system() == 'Windows':
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+else:
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+```
+
+<Warning>
+  **Windows Compatibility**: XVID codec is used on Windows for better compatibility. Linux/macOS use mp4v codec.
+</Warning>
+
+## Performance Considerations
+
+### Processing Speed
+
+- **Face Detection Mode**: ~50-100 frames per second (static crop, minimal overhead)
+- **Motion Tracking Mode**: ~10-30 frames per second (optical flow computation)
+
+### Resource Usage
+
+```python Components/FaceCrop.py:174-175
+if frame_count % 100 == 0:
+    print(f"Processed {frame_count}/{total_frames} frames")
+```
+
+Progress is logged every 100 frames to monitor processing status.
+
+## Output Quality
+
+The final video is combined with audio using MoviePy:
+
+```python Components/FaceCrop.py:194
+combined_clip.write_videofile(
+    output_filename, 
+    codec='libx264', 
+    audio_codec='aac', 
+    fps=Fps, 
+    preset='medium', 
+    bitrate='3000k'
+)
+```
+
+<ParamField path="codec" type="string" default="libx264">
+  H.264 video codec for wide compatibility.
+</ParamField>
+
+<ParamField path="audio_codec" type="string" default="aac">
+  AAC audio codec for mobile compatibility.
+</ParamField>
+
+<ParamField path="preset" type="string" default="medium">
+  Encoding speed preset. Options: ultrafast, fast, medium, slow, veryslow. Slower = better compression.
+</ParamField>
+
+<ParamField path="bitrate" type="string" default="3000k">
+  Target video bitrate. 3000k provides good quality for 1080p vertical video.
+</ParamField>
+
+## Customizing Crop Behavior
+
+<Accordion title="Adjust Face Detection Sensitivity">
+  Edit `Components/FaceCrop.py:40`:
+  
+  ```python
+  # More sensitive (may increase false positives)
+  faces = face_cascade.detectMultiScale(
+      gray, scaleFactor=1.05, minNeighbors=5, minSize=(20, 20)
+  )
+  
+  # Less sensitive (fewer false positives, may miss faces)
+  faces = face_cascade.detectMultiScale(
+      gray, scaleFactor=1.2, minNeighbors=12, minSize=(50, 50)
+  )
+  ```
+</Accordion>
+
+<Accordion title="Change Motion Tracking Update Rate">
+  Edit `Components/FaceCrop.py:99`:
+  
+  ```python
+  # Update twice per second (more responsive, less smooth)
+  update_interval = int(fps / 2)
+  
+  # Update every 2 seconds (smoother, less responsive)
+  update_interval = int(fps * 2)
+  ```
+</Accordion>
+
+<Accordion title="Modify Smoothing Strength">
+  Edit `Components/FaceCrop.py:136`:
+  
+  ```python
+  # Less smoothing (more responsive, may be jerky)
+  smoothed_x = int(0.70 * smoothed_x + 0.30 * target_x)
+  
+  # More smoothing (smoother, slower response)
+  smoothed_x = int(0.95 * smoothed_x + 0.05 * target_x)
+  ```
+</Accordion>

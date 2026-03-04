@@ -1,0 +1,280 @@
+---
+title: 'Face Crop'
+description: 'Intelligent vertical video cropping with face detection and motion tracking'
+icon: 'crop'
+---
+
+The Face Crop component converts horizontal videos to vertical 9:16 format with intelligent face-centered or motion-tracked cropping.
+
+## Functions
+
+### crop_to_vertical
+
+Crops a video to vertical 9:16 aspect ratio with intelligent face detection or motion tracking.
+
+```python
+crop_to_vertical(input_video_path: str, output_video_path: str) -> None
+```
+
+<ParamField path="input_video_path" type="str" required>
+  Path to the input video file to crop
+</ParamField>
+
+<ParamField path="output_video_path" type="str" required>
+  Path where the cropped vertical video will be saved
+</ParamField>
+
+#### Cropping Modes
+
+The function automatically detects the best cropping strategy:
+
+<Tabs>
+  <Tab title="Face Detection Mode">
+    **When**: A face is detected in the first 30 frames
+    
+    **Behavior**:
+    - Analyzes first 30 frames to detect faces
+    - Uses median face position for stability
+    - Applies 60px right offset to prevent cutoff
+    - Uses static crop position (no tracking)
+    - Best for: Talking head videos, interviews, vlogs
+    
+    ```python
+    # Face detected - using face-centered crop
+    avg_face_x = int(sorted(face_positions)[len(face_positions) // 2])
+    avg_face_x += 60  # Offset to prevent right-side cutoff
+    x_start = max(0, min(avg_face_x - vertical_width // 2, 
+                         original_width - vertical_width))
+    ```
+  </Tab>
+  
+  <Tab title="Motion Tracking Mode">
+    **When**: No face detected (likely screen recording)
+    
+    **Behavior**:
+    - Scales video to show 67% of original width
+    - Tracks motion using optical flow (Farneback algorithm)
+    - Updates crop position every 1 second
+    - Smooth tracking (90% previous, 10% new position)
+    - Best for: Screen recordings, gameplay, tutorials
+    
+    ```python
+    # No face detected - using motion tracking
+    target_display_width = original_width * 0.67
+    scale = vertical_width / target_display_width
+    
+    # Update tracking once per second
+    if frame_count % update_interval == 0:
+        # Calculate optical flow
+        flow = cv2.calcOpticalFlowFarneback(...)
+        # Track motion and update crop position
+    ```
+  </Tab>
+</Tabs>
+
+#### Output Specifications
+
+- **Aspect Ratio**: 9:16 (vertical/portrait)
+- **Height**: Preserves original video height
+- **Width**: Calculated as `height * 9/16`
+- **Dimensions**: Always even numbers (codec requirement)
+- **Codec**: XVID (Windows) or mp4v (Linux/Mac)
+- **FPS**: Preserves original frame rate
+
+<CodeGroup>
+```python Usage Example
+from Components.FaceCrop import crop_to_vertical
+
+# Crop video to vertical format
+input_video = "horizontal_video.mp4"
+output_video = "vertical_video.mp4"
+
+crop_to_vertical(input_video, output_video)
+
+# Output:
+# Detecting face position for static crop...
+# ✓ Face detected. Using face-centered crop at x=450
+# Output dimensions: 608x1080
+# Processed 100/3000 frames
+# Processed 200/3000 frames
+# ...
+# Cropping complete. Processed 3000 frames -> vertical_video.mp4
+```
+
+```python From main.py
+# Create vertical short from highlight clip
+print("Step 2/4: Cropping to vertical format (9:16)...")
+crop_to_vertical(temp_clip, temp_cropped)
+
+# Later: combine with audio
+combine_videos(temp_clip, temp_cropped, final_output)
+```
+</CodeGroup>
+
+## Features
+
+### Face Detection
+
+- Uses OpenCV's Haar Cascade classifier
+- Samples first 30 frames for stable detection
+- Selects largest face if multiple detected
+- Uses median position to avoid outliers
+- 60px right offset prevents edge cutoff
+
+```python
+face_cascade = cv2.CascadeClassifier(
+    cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
+)
+faces = face_cascade.detectMultiScale(
+    gray, 
+    scaleFactor=1.1, 
+    minNeighbors=8, 
+    minSize=(30, 30)
+)
+```
+
+### Motion Tracking
+
+- Optical flow using Farneback algorithm
+- Updates every 1 second (once per `fps` frames)
+- Focuses on significant motion (threshold: 2.0)
+- Smooth tracking with 90/10 interpolation
+- Prevents abrupt camera movements
+
+```python
+flow = cv2.calcOpticalFlowFarneback(
+    prev_gray, curr_gray, None,
+    0.5, 3, 15, 3, 5, 1.2, 0
+)
+magnitude = np.sqrt(flow[..., 0]**2 + flow[..., 1]**2)
+
+# Smooth tracking
+smoothed_x = int(0.90 * smoothed_x + 0.10 * target_x)
+```
+
+### Scaling and Letterboxing
+
+For screen recordings:
+- Scales to show 67% of original width
+- Adds letterboxing if needed to maintain aspect ratio
+- Uses LANCZOS4 interpolation for quality
+
+<Note>
+  The function sets a global `Fps` variable used by `combine_videos()` to ensure frame rate consistency.
+</Note>
+
+---
+
+### combine_videos
+
+Combines audio from one video with visuals from another, used to add original audio to cropped videos.
+
+```python
+combine_videos(video_with_audio: str, video_without_audio: str, 
+               output_filename: str) -> None
+```
+
+<ParamField path="video_with_audio" type="str" required>
+  Path to video file containing the audio track to use
+</ParamField>
+
+<ParamField path="video_without_audio" type="str" required>
+  Path to video file containing the visual content to use
+</ParamField>
+
+<ParamField path="output_filename" type="str" required>
+  Path where the combined video will be saved
+</ParamField>
+
+#### Output Specifications
+
+- **Video Codec**: libx264 (H.264)
+- **Audio Codec**: AAC
+- **Preset**: medium (balanced speed/quality)
+- **Bitrate**: 3000k
+- **FPS**: Uses global `Fps` variable from `crop_to_vertical()`
+
+<CodeGroup>
+```python Usage Example
+from Components.FaceCrop import crop_to_vertical, combine_videos
+
+# Step 1: Crop to vertical (removes audio)
+crop_to_vertical("original.mp4", "cropped_no_audio.mp4")
+
+# Step 2: Add original audio back
+combine_videos(
+    video_with_audio="original.mp4",
+    video_without_audio="cropped_no_audio.mp4",
+    output_filename="final_with_audio.mp4"
+)
+
+# Output:
+# Combined video saved successfully as final_with_audio.mp4
+```
+
+```python From main.py
+# Crop video to vertical format
+crop_to_vertical(temp_clip, temp_cropped)
+
+# Add subtitles (also removes audio)
+add_subtitles_to_video(temp_cropped, temp_subtitled, 
+                       transcriptions, video_start_time=start)
+
+# Add original audio back to final video
+print("Step 4/4: Adding audio to final video...")
+combine_videos(temp_clip, temp_subtitled, final_output)
+```
+</CodeGroup>
+
+## Error Handling
+
+```python
+try:
+    crop_to_vertical(input_path, output_path)
+except Exception as e:
+    print(f"Cropping failed: {e}")
+
+try:
+    combine_videos(audio_source, video_source, output)
+except Exception as e:
+    print(f"Error combining video and audio: {str(e)}")
+```
+
+<Warning>
+  Requires OpenCV (`cv2`), NumPy, and MoviePy. The cropping process can be CPU/GPU intensive for long videos.
+</Warning>
+
+## Progress Tracking
+
+Both functions provide progress updates:
+
+```python
+# crop_to_vertical progress
+if frame_count % 100 == 0:
+    print(f"Processed {frame_count}/{total_frames} frames")
+
+# combine_videos progress
+# MoviePy shows built-in progress bar during write_videofile()
+```
+
+## Performance Tips
+
+1. **Face Detection**: Only samples first 30 frames for speed
+2. **Motion Tracking**: Updates once per second (not every frame)
+3. **Smooth Tracking**: Uses 90/10 interpolation to reduce jitter
+4. **Codec Selection**: Platform-specific codec for compatibility
+5. **Dimension Alignment**: Ensures even dimensions for codec compatibility
+
+## Platform Compatibility
+
+```python
+import platform
+
+if platform.system() == 'Windows':
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+else:
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+```
+
+- **Windows**: Uses XVID codec
+- **Linux/Mac**: Uses mp4v codec

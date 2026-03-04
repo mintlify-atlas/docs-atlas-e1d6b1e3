@@ -1,0 +1,134 @@
+---
+title: 'Transcription'
+description: 'Audio transcription using Faster Whisper with GPU acceleration'
+icon: 'microphone'
+---
+
+The Transcription component uses Faster Whisper to convert audio files to timestamped text segments with automatic GPU acceleration.
+
+## Functions
+
+### transcribeAudio
+
+Transcribes an audio file into timestamped text segments using the Faster Whisper model.
+
+```python
+transcribeAudio(audio_path: str) -> list[list[str, float, float]]
+```
+
+<ParamField path="audio_path" type="str" required>
+  Path to the audio file to transcribe (supports WAV, MP3, and other common formats)
+</ParamField>
+
+<ResponseField name="transcriptions" type="list[list]">
+  List of transcription segments, where each segment is `[text, start_time, end_time]`:
+  - `text` (str): The transcribed text for this segment
+  - `start_time` (float): Start time in seconds
+  - `end_time` (float): End time in seconds
+</ResponseField>
+
+#### Model Configuration
+
+- **Model**: `base.en` (English-only for faster processing)
+- **Device**: Automatically selects CUDA if available, otherwise CPU
+- **Beam Size**: 5 (for better accuracy)
+- **Language**: English (`en`)
+- **Max New Tokens**: 128
+- **Condition on Previous Text**: False (prevents context accumulation)
+
+#### Features
+
+- **Automatic GPU Detection**: Uses CUDA if available for 5-10x faster transcription
+- **Timestamped Segments**: Returns precise start/end times for each phrase
+- **Error Handling**: Returns empty list on failure with error message
+- **Progress Indication**: Prints device type and completion status
+
+<CodeGroup>
+```python Usage Example
+from Components.Transcription import transcribeAudio
+
+# Transcribe audio file
+transcriptions = transcribeAudio("audio.wav")
+
+for text, start, end in transcriptions:
+    print(f"[{start:.2f}s - {end:.2f}s]: {text}")
+
+# Output:
+# [0.00s - 2.50s]: Hello and welcome to this video
+# [2.50s - 5.20s]: Today we'll be discussing AI
+# [5.20s - 8.40s]: and its applications in video processing
+```
+
+```python From main.py
+# Extract and transcribe audio
+Audio = extractAudio(Vid, audio_file)
+if Audio:
+    transcriptions = transcribeAudio(Audio)
+    if len(transcriptions) > 0:
+        print(f"TRANSCRIPTION SUMMARY: {len(transcriptions)} segments")
+        
+        # Build full text with timestamps
+        TransText = ""
+        for text, start, end in transcriptions:
+            TransText += f"{start} - {end}: {text}\n"
+        
+        # Use transcription for highlight detection
+        start, stop = GetHighlight(TransText)
+```
+</CodeGroup>
+
+## Output Format
+
+Each transcription segment is a list with three elements:
+
+```python
+[
+    ["Hello and welcome to this video", 0.0, 2.5],
+    ["Today we'll be discussing AI", 2.5, 5.2],
+    ["and its applications", 5.2, 8.4]
+]
+```
+
+<Note>
+  The function automatically detects and uses GPU acceleration if CUDA is available. On CPU, transcription may be significantly slower for long audio files.
+</Note>
+
+## Performance
+
+- **GPU (CUDA)**: ~1-2 minutes for a 10-minute audio file
+- **CPU**: ~5-10 minutes for a 10-minute audio file
+- **Model Size**: ~150MB download on first run
+
+## Device Detection
+
+The component prints the detected device on execution:
+
+```python
+print("Transcribing audio...")
+Device = "cuda" if torch.cuda.is_available() else "cpu"
+print(Device)  # Prints: "cuda" or "cpu"
+```
+
+## Error Handling
+
+Returns an empty list if transcription fails:
+
+```python
+transcriptions = transcribeAudio("audio.wav")
+
+if len(transcriptions) == 0:
+    print("Transcription failed or no speech detected")
+else:
+    print(f"Successfully transcribed {len(transcriptions)} segments")
+```
+
+<Warning>
+  Requires `faster-whisper` and `torch` packages. For GPU acceleration, CUDA toolkit must be installed. The Whisper model is downloaded automatically on first run (~150MB).
+</Warning>
+
+## Model Details
+
+- **Model Name**: `base.en`
+- **Language Support**: English only (faster than multilingual models)
+- **Accuracy**: Good for clear speech, may struggle with heavy accents or background noise
+- **Beam Search**: Uses beam size of 5 for better accuracy vs. speed tradeoff

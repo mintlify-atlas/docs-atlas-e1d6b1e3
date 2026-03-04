@@ -1,0 +1,235 @@
+---
+title: 'Language Tasks'
+description: 'AI-powered highlight selection using GPT-4o-mini'
+icon: 'brain'
+---
+
+The Language Tasks component uses OpenAI's GPT-4o-mini to analyze video transcriptions and intelligently select the most engaging 2-minute highlight segment.
+
+## Functions
+
+### GetHighlight
+
+Analyzes a timestamped transcription and selects the most interesting 2-minute segment using AI.
+
+```python
+GetHighlight(Transcription: str) -> tuple[int, int]
+```
+
+<ParamField path="Transcription" type="str" required>
+  Timestamped transcription text in the format:
+  ```
+  0.0 - 2.5: Hello and welcome
+  2.5 - 5.2: Today we'll discuss AI
+  5.2 - 8.4: and its applications
+  ```
+</ParamField>
+
+<ResponseField name="start_time" type="int">
+  Start time of the selected highlight segment in seconds
+</ResponseField>
+
+<ResponseField name="end_time" type="int">
+  End time of the selected highlight segment in seconds
+</ResponseField>
+
+<Note>
+  Returns `(None, None)` if the AI fails to generate a valid response or encounters an error.
+</Note>
+
+#### Selection Criteria
+
+The AI selects segments that are:
+- **Interesting**: Contains valuable or engaging content
+- **Useful**: Provides actionable information or insights
+- **Surprising**: Includes unexpected or novel information
+- **Controversial**: Presents thought-provoking viewpoints
+- **Complete**: Contains only full sentences forming complete thoughts
+- **Duration**: Approximately 2 minutes long
+
+#### Features
+
+- **Smart Segment Selection**: Uses GPT-4o-mini to understand context and content quality
+- **Complete Sentences**: Ensures selected text doesn't cut sentences mid-way
+- **Structured Output**: Uses function calling for reliable JSON responses
+- **Validation**: Checks for valid time ranges and positive durations
+- **Error Recovery**: Interactive retry option if segment selection fails
+- **Detailed Logging**: Prints selected segment details for verification
+
+<CodeGroup>
+```python Usage Example
+from Components.LanguageTasks import GetHighlight
+
+# Build timestamped transcription
+transcription_text = """
+0.0 - 2.5: Hello and welcome to this video
+2.5 - 5.2: Today we'll be discussing AI
+5.2 - 8.4: and its applications in video processing
+8.4 - 120.0: [Rest of transcription...]
+"""
+
+# Get highlight segment
+start, end = GetHighlight(transcription_text)
+
+if start is not None and end is not None:
+    print(f"Best highlight: {start}s to {end}s ({end-start}s duration)")
+    # Output: Best highlight: 5s to 125s (120s duration)
+else:
+    print("Failed to get highlight")
+```
+
+```python From main.py
+# Transcribe audio and get highlight
+transcriptions = transcribeAudio(Audio)
+if len(transcriptions) > 0:
+    # Build full timestamped text
+    TransText = ""
+    for text, start, end in transcriptions:
+        TransText += f"{start} - {end}: {text}\n"
+    
+    # Get AI-selected highlight
+    print("Analyzing transcription to find best highlight...")
+    start, stop = GetHighlight(TransText)
+    
+    # Check if GetHighlight failed
+    if start is None or stop is None:
+        print("ERROR: Failed to get highlight from LLM")
+        sys.exit(1)
+    
+    # Use highlight times to crop video
+    crop_video(Vid, temp_clip, start, stop)
+```
+</CodeGroup>
+
+## Response Structure
+
+The AI returns a structured response using the `JSONResponse` Pydantic model:
+
+```python
+class JSONResponse(BaseModel):
+    start: float  # Start time in seconds
+    content: str  # The transcribed text from the segment
+    end: float    # End time in seconds
+```
+
+## Validation
+
+The function performs extensive validation:
+
+<Tabs>
+  <Tab title="Response Validation">
+    ```python
+    # Checks for empty response
+    if not response:
+        return None, None
+    
+    # Checks for required fields
+    if not hasattr(response, 'start') or not hasattr(response, 'end'):
+        return None, None
+    ```
+  </Tab>
+  <Tab title="Time Validation">
+    ```python
+    # Parse times
+    Start = int(response.start)
+    End = int(response.end)
+    
+    # Check for negative values
+    if Start < 0 or End < 0:
+        print("ERROR: Negative time values")
+        return None, None
+    
+    # Check for valid range
+    if End <= Start:
+        print("ERROR: Invalid time range (end must be > start)")
+        return None, None
+    ```
+  </Tab>
+  <Tab title="Error Recovery">
+    ```python
+    # Interactive retry for invalid segments
+    if Start == End:
+        Ask = input("Error - Get Highlights again (y/n) -> ").lower()
+        if Ask == "y":
+            Start, End = GetHighlight(Transcription)
+        return Start, End
+    ```
+  </Tab>
+</Tabs>
+
+## Detailed Logging
+
+The function provides comprehensive logging:
+
+```python
+print(f"\n{'='*60}")
+print(f"SELECTED SEGMENT DETAILS:")
+print(f"Time: {Start}s - {End}s ({End-Start}s duration)")
+print(f"Content: {response.content}")
+print(f"{'='*60}\n")
+```
+
+## Configuration
+
+<ParamField path="model" type="str" default="gpt-4o-mini">
+  OpenAI model used for highlight selection (cost-effective)
+</ParamField>
+
+<ParamField path="temperature" type="float" default="1.0">
+  Controls randomness in AI responses (1.0 = more creative)
+</ParamField>
+
+<ParamField path="method" type="str" default="function_calling">
+  Structured output method for reliable JSON responses
+</ParamField>
+
+## Environment Variables
+
+<Warning>
+  Requires `OPENAI_API` environment variable set in `.env` file:
+  ```bash
+  OPENAI_API=sk-your-api-key-here
+  ```
+</Warning>
+
+## Error Handling
+
+Comprehensive error handling with detailed diagnostics:
+
+```python
+try:
+    start, end = GetHighlight(transcription)
+except Exception as e:
+    print(f"ERROR IN GetHighlight FUNCTION:")
+    print(f"Exception type: {type(e).__name__}")
+    print(f"Exception message: {str(e)}")
+    print(f"Transcription length: {len(transcription)} characters")
+```
+
+Common failure scenarios:
+- Invalid or missing OpenAI API key
+- API rate limiting
+- Network connectivity issues
+- Malformed transcription data
+- AI returns invalid time ranges
+
+## System Prompt
+
+The AI uses this system prompt for selection:
+
+```text
+The input contains a timestamped transcription of a video.
+Select a 2-minute segment from the transcription that contains something 
+interesting, useful, surprising, controversial, or thought-provoking.
+
+The selected text should contain only complete sentences.
+Do not cut the sentences in the middle.
+The selected text should form a complete thought.
+```
+
+## Dependencies
+
+- `langchain-openai`: For ChatOpenAI interface
+- `pydantic`: For structured output validation
+- `python-dotenv`: For environment variable loading
+- OpenAI API key with GPT-4o-mini access

@@ -1,0 +1,127 @@
+---
+title: 'YouTube Downloader'
+description: 'Download YouTube videos with resolution selection and automatic format handling'
+icon: 'download'
+---
+
+The YouTube Downloader component handles downloading videos from YouTube URLs with interactive resolution selection and automatic video/audio merging for adaptive streams.
+
+## Functions
+
+### download_youtube_video
+
+Downloads a YouTube video with interactive quality selection and automatic handling of progressive and adaptive streams.
+
+```python
+download_youtube_video(url: str) -> str
+```
+
+<ParamField path="url" type="str" required>
+  The YouTube video URL to download
+</ParamField>
+
+<ResponseField name="output_file" type="str">
+  Path to the downloaded video file in the `videos/` directory
+</ResponseField>
+
+#### Features
+
+- **Interactive Resolution Selection**: Shows top 5 available resolutions with sizes
+- **Auto-Selection**: 5-second timeout automatically selects highest quality
+- **Adaptive Stream Handling**: Automatically merges separate video/audio streams using ffmpeg
+- **Safe Filenames**: Sanitizes video titles by removing invalid filename characters
+
+#### Process Flow
+
+1. Fetches available video streams and audio stream
+2. Displays top 5 resolution options with file sizes
+3. Waits for user input (5 second timeout)
+4. Downloads selected video stream
+5. For adaptive streams:
+   - Downloads audio stream separately
+   - Merges video and audio using ffmpeg with H.264/AAC codecs
+   - Removes temporary files
+6. Returns path to final video file
+
+<CodeGroup>
+```python Usage Example
+from Components.YoutubeDownloader import download_youtube_video
+
+# Download with interactive selection
+video_path = download_youtube_video("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+print(f"Video saved to: {video_path}")
+# Output: videos/Video Title.mp4
+```
+
+```python From main.py
+# Check if input is URL or local file
+if os.path.isfile(url_or_file):
+    Vid = url_or_file
+else:
+    # Download from YouTube
+    Vid = download_youtube_video(url_or_file)
+    if Vid:
+        Vid = Vid.replace(".webm", ".mp4")
+        print(f"Downloaded video successfully at {Vid}")
+```
+</CodeGroup>
+
+<Note>
+  Downloaded videos are saved to the `videos/` directory, which is automatically created if it doesn't exist.
+</Note>
+
+<Warning>
+  Requires `pytubefix`, `ffmpeg-python`, and system `ffmpeg` to be installed. The function handles errors gracefully and provides installation instructions if dependencies are missing.
+</Warning>
+
+---
+
+### get_video_size
+
+Helper function to calculate video stream file size in megabytes.
+
+```python
+get_video_size(stream) -> float
+```
+
+<ParamField path="stream" type="pytube.Stream" required>
+  PyTube stream object to calculate size for
+</ParamField>
+
+<ResponseField name="size_mb" type="float">
+  File size in megabytes (MB)
+</ResponseField>
+
+#### Example
+
+```python
+from pytubefix import YouTube
+from Components.YoutubeDownloader import get_video_size
+
+yt = YouTube("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+stream = yt.streams.first()
+size = get_video_size(stream)
+print(f"Size: {size:.2f} MB")
+```
+
+## Output Format
+
+Videos are saved with sanitized titles:
+- Invalid characters (`|:?*<>"/\`) are removed or replaced with hyphens
+- Format: `videos/[Sanitized Title].mp4`
+- Codec: H.264 (libx264) for video, AAC for audio
+
+## Error Handling
+
+The function catches all exceptions and provides helpful error messages:
+- Missing dependencies (pytube, ffmpeg-python, ffmpeg)
+- Network issues
+- Invalid URLs
+- Download failures
+
+```python
+try:
+    video_path = download_youtube_video(url)
+except Exception as e:
+    print(f"Download failed: {e}")
+```

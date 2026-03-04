@@ -1,0 +1,412 @@
+---
+title: 'Troubleshooting'
+description: 'Solutions for common issues with CUDA, ImageMagick, face detection, transcription, and API errors'
+---
+
+This guide covers solutions to common issues you may encounter when using the AI YouTube Shorts Generator.
+
+## CUDA and GPU Setup
+
+### Issue: CUDA Libraries Not Found
+
+If you see errors like `libcudnn.so.8: cannot open shared object file`, the NVIDIA CUDA libraries aren't in your system's library path.
+
+<Steps>
+  <Step title="Verify CUDA Installation">
+    Check if CUDA libraries are installed in your virtual environment:
+    ```bash
+    find venv/lib/python3.10/site-packages/nvidia -name "lib" -type d
+    ```
+    This should return multiple paths containing CUDA libraries.
+  </Step>
+  <Step title="Set Library Path">
+    Export the library path before running the application:
+    ```bash
+    export LD_LIBRARY_PATH=$(find $(pwd)/venv/lib/python3.10/site-packages/nvidia -name "lib" -type d | paste -sd ":" -)
+    ```
+  </Step>
+  <Step title="Use the run.sh Script">
+    The provided `run.sh` script automatically handles this. Always run:
+    ```bash
+    ./run.sh "https://youtu.be/VIDEO_ID"
+    ```
+    Instead of calling `python main.py` directly.
+  </Step>
+</Steps>
+
+<Tip>
+  The `run.sh` script is the recommended way to run the application as it properly configures the CUDA environment.
+</Tip>
+
+### Issue: No GPU Acceleration
+
+If transcription is unexpectedly slow, verify GPU is being used:
+
+```bash
+python -c "import torch; print('CUDA available:', torch.cuda.is_available())"
+```
+
+<Accordion title="Expected Output">
+  - **With GPU**: `CUDA available: True`
+  - **CPU-only**: `CUDA available: False`
+  
+  If you have an NVIDIA GPU but see `False`, reinstall PyTorch with CUDA support:
+  ```bash
+  pip uninstall torch
+  pip install torch --index-url https://download.pytorch.org/whl/cu118
+  ```
+</Accordion>
+
+### Issue: Wrong CUDA Version
+
+If you get compatibility errors, check your CUDA version:
+
+```bash
+nvcc --version  # System CUDA version
+python -c "import torch; print(torch.version.cuda)"  # PyTorch CUDA version
+```
+
+<Warning>
+  The system CUDA version and PyTorch CUDA version must be compatible. If they don't match, reinstall PyTorch with the correct CUDA version from [pytorch.org](https://pytorch.org).
+</Warning>
+
+## ImageMagick Policy Issues
+
+### Issue: No Subtitles Appearing on Video
+
+If the video generates successfully but subtitles are missing, this is usually an ImageMagick security policy issue.
+
+<Steps>
+  <Step title="Check Policy File">
+    Verify the current policy settings:
+    ```bash
+    grep 'pattern="@\*"' /etc/ImageMagick-6/policy.xml
+    ```
+    Look for a line containing `pattern="@*"`.
+  </Step>
+  <Step title="Check Current Rights">
+    If the output shows `rights="none"`, ImageMagick is blocking file operations needed for subtitles.
+  </Step>
+  <Step title="Fix the Policy">
+    Run this command to allow read/write operations:
+    ```bash
+    sudo sed -i 's/rights="none" pattern="@\*"/rights="read|write" pattern="@*"/' /etc/ImageMagick-6/policy.xml
+    ```
+  </Step>
+  <Step title="Verify the Fix">
+    Confirm the change:
+    ```bash
+    grep 'pattern="@\*"' /etc/ImageMagick-6/policy.xml
+    ```
+    Should now show: `rights="read|write"`
+  </Step>
+</Steps>
+
+<Note>
+  This issue is specific to Linux systems. macOS and Windows ImageMagick installations typically don't have this restriction.
+</Note>
+
+### Alternative: Manual Policy Edit
+
+If the command above doesn't work:
+
+<Tabs>
+  <Tab title="Ubuntu/Debian">
+    Edit `/etc/ImageMagick-6/policy.xml` (or `/etc/ImageMagick-7/policy.xml`):
+    
+    Find:
+    ```xml
+    <policy domain="path" rights="none" pattern="@*"/>
+    ```
+    
+    Change to:
+    ```xml
+    <policy domain="path" rights="read|write" pattern="@*"/>
+    ```
+  </Tab>
+  <Tab title="Windows">
+    Edit `C:\Program Files\ImageMagick-7.x.x-Q16-HDRI\config\policy.xml`:
+    
+    Find:
+    ```xml
+    <policy domain="path" rights="none" pattern="@*"/>
+    ```
+    
+    Change to:
+    ```xml
+    <policy domain="path" rights="read|write" pattern="@*"/>
+    ```
+  </Tab>
+</Tabs>
+
+## Face Detection Failures
+
+### Issue: Face-Centered Crop Not Working
+
+The application prints `✗ No face detected. Using half-width with motion tracking for screen recording` even though there are faces in the video.
+
+<Accordion title="Common Causes">
+  1. **Faces too small**: Default `minSize=(30, 30)` may miss distant or small faces
+  2. **Faces not visible in first 30 frames**: Detection only samples the beginning
+  3. **Poor lighting or unusual angles**: Affects detection accuracy
+  4. **Low video resolution**: 480p and below have less reliable face detection
+</Accordion>
+
+### Solution: Adjust Detection Parameters
+
+Edit `Components/FaceCrop.py` at line 40:
+
+```python Components/FaceCrop.py:40
+# More sensitive detection
+faces = face_cascade.detectMultiScale(
+    gray, 
+    scaleFactor=1.05,  # Was 1.1 - slower but more thorough
+    minNeighbors=5,     # Was 8 - lower threshold
+    minSize=(20, 20)    # Was (30, 30) - detect smaller faces
+)
+```
+
+<Warning>
+  Lower `minNeighbors` values may cause false positives (detecting non-face objects as faces). Test with your typical video content.
+</Warning>
+
+### Issue: Wrong Face Selected
+
+If multiple people are in frame and the wrong person is centered:
+
+The code selects the largest face (line 43):
+```python
+best_face = max(faces, key=lambda f: f[2] * f[3])  # Largest face by area
+```
+
+<Tip>
+  To prioritize the face closest to center instead of the largest face, modify the selection logic to use horizontal position rather than size.
+</Tip>
+
+## Transcription Issues
+
+### Issue: No Transcriptions Found
+
+If you see `No transcriptions found` after the audio extraction step:
+
+<Steps>
+  <Step title="Verify Audio Extraction">
+    Check if the audio file was created:
+    ```bash
+    ls -lh audio_*.wav
+    ```
+    If the file exists but is very small (less than 100KB), the video may not contain audio.
+  </Step>
+  <Step title="Check Audio in Source">
+    Verify the source video has an audio track:
+    ```bash
+    ffmpeg -i your_video.mp4
+    ```
+    Look for an `Audio:` line in the output. If missing, the video has no audio track.
+  </Step>
+  <Step title="Check for Errors">
+    Look for Whisper-related errors in the console output. Memory errors may indicate insufficient RAM or VRAM.
+  </Step>
+</Steps>
+
+<Info>
+  Whisper requires approximately 1-2GB of VRAM (GPU mode) or 4-8GB RAM (CPU mode) depending on the model size.
+</Info>
+
+### Issue: Transcription is Very Slow
+
+**Expected speeds:**
+- **GPU (CUDA)**: ~5-10 seconds per minute of audio
+- **CPU**: ~30-60 seconds per minute of audio
+
+If transcription is much slower:
+
+<Tabs>
+  <Tab title="GPU Mode">
+    1. Verify GPU is being used (see [CUDA and GPU Setup](#cuda-and-gpu-setup))
+    2. Check GPU memory: `nvidia-smi`
+    3. Close other GPU-intensive applications
+    4. Consider using a smaller Whisper model if VRAM is limited
+  </Tab>
+  <Tab title="CPU Mode">
+    CPU transcription is inherently slower. Options:
+    - Use shorter videos
+    - Process videos in batches overnight
+    - Consider using GPU mode or the [AI Clipping API](https://muapi.ai/playground/ai-clipping)
+  </Tab>
+</Tabs>
+
+## OpenAI API Errors
+
+### Issue: Failed to Get Highlight from LLM
+
+If you see `ERROR: Failed to get highlight from LLM`, this indicates the highlight selection failed.
+
+<Accordion title="Common Causes">
+  1. **Invalid API Key**: Check your `.env` file
+  2. **Rate Limiting**: Too many requests to OpenAI API
+  3. **Network Issues**: Connectivity problems
+  4. **Insufficient Credits**: OpenAI account has no remaining credits
+  5. **Malformed Transcription**: Very short videos or corrupted transcription data
+</Accordion>
+
+### Solution: Verify API Configuration
+
+<Steps>
+  <Step title="Check API Key">
+    Verify your `.env` file contains a valid key:
+    ```bash
+    cat .env
+    ```
+    Should show: `OPENAI_API=sk-...`
+  </Step>
+  <Step title="Test API Key">
+    Test the key directly:
+    ```bash
+    curl https://api.openai.com/v1/models \
+      -H "Authorization: Bearer YOUR_API_KEY"
+    ```
+    Should return a list of available models.
+  </Step>
+  <Step title="Check Account Status">
+    Log into [platform.openai.com](https://platform.openai.com) and verify:
+    - Account has remaining credits
+    - No rate limit warnings
+    - API key is active
+  </Step>
+</Steps>
+
+<Warning>
+  The `.env` file must be in the same directory as `main.py`. If running from a different directory, use an absolute path or copy the `.env` file.
+</Warning>
+
+### Issue: Rate Limiting Errors
+
+If processing multiple videos, you may hit OpenAI rate limits:
+
+```
+OpenAI API error: Rate limit exceeded
+```
+
+**Solutions:**
+1. Add delays between videos in batch processing:
+   ```bash
+   xargs -a urls.txt -I{} sh -c './run.sh {} && sleep 10'
+   ```
+2. Upgrade to a higher tier OpenAI account
+3. Use a different model (e.g., `gpt-3.5-turbo` has higher limits)
+
+## Concurrent Execution Conflicts
+
+### Issue: File Conflicts When Running Multiple Instances
+
+Older versions created files like `audio.wav` that conflicted. Current version uses session IDs.
+
+<Info>
+  As of the latest version, each run gets a unique session ID (8-character UUID). Temporary files are named:
+  - `audio_{session_id}.wav`
+  - `temp_clip_{session_id}.mp4`
+  - `temp_cropped_{session_id}.mp4`
+  - `temp_subtitled_{session_id}.mp4`
+  
+  This allows multiple instances to run simultaneously without conflicts.
+</Info>
+
+### Verification
+
+To verify session ID support:
+
+```bash
+./run.sh "https://youtu.be/VIDEO_ID"
+```
+
+You should see:
+```
+Session ID: a1b2c3d4
+```
+
+At the start of execution. Each concurrent run will have a different ID.
+
+## Video Quality Issues
+
+### Issue: Blurry or Low-Quality Output
+
+If the final video quality is poor:
+
+1. **Check source resolution**: The output quality cannot exceed the input
+   ```bash
+   ffmpeg -i input_video.mp4
+   ```
+
+2. **Increase bitrate** in `Components/Subtitles.py` and `Components/FaceCrop.py`:
+   ```python
+   bitrate='5000k'  # Was '3000k'
+   ```
+
+3. **Use slower preset** for better compression:
+   ```python
+   preset='slow'  # Was 'medium'
+   ```
+
+<Tip>
+  For 1080p source videos, use `bitrate='5000k'` or higher. For 720p, `3000k` is usually sufficient.
+</Tip>
+
+### Issue: Large Output File Sizes
+
+If output files are too large:
+
+1. **Lower bitrate**:
+   ```python
+   bitrate='2000k'  # Smaller files
+   ```
+
+2. **Use faster preset** (less efficient compression):
+   ```python
+   preset='fast'  # Faster encoding, larger files
+   ```
+
+<Note>
+  A 2-minute 1080p vertical video typically ranges from 20-50MB depending on bitrate and content complexity.
+</Note>
+
+## Getting Additional Help
+
+### Collect Debugging Information
+
+When reporting issues, include:
+
+<Steps>
+  <Step title="Environment Info">
+    ```bash
+    python --version
+    pip list | grep -E "torch|whisper|opencv|moviepy|langchain"
+    nvidia-smi  # If using GPU
+    ```
+  </Step>
+  <Step title="Error Output">
+    Copy the full console output, especially error messages and stack traces.
+  </Step>
+  <Step title="Video Details">
+    ```bash
+    ffmpeg -i your_video.mp4
+    ```
+    Include resolution, duration, and codec information.
+  </Step>
+</Steps>
+
+### Alternative Solutions
+
+<Accordion title="If Self-Hosting Issues Persist">
+  Consider using the [AI Clipping API](https://muapi.ai/playground/ai-clipping) which offers:
+  - No installation or dependency management
+  - Faster processing with optimized infrastructure
+  - Better clip selection algorithms
+  - Professional support
+</Accordion>
+
+### Community Resources
+
+- **GitHub Issues**: [github.com/SamurAIGPT/AI-Youtube-Shorts-Generator/issues](https://github.com/SamurAIGPT/AI-Youtube-Shorts-Generator/issues)
+- **Documentation**: Check the README.md for latest updates
+- **Related Projects**: See the README for similar tools and alternatives
