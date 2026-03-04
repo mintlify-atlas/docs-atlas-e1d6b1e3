@@ -1,0 +1,89 @@
+{
+  "projectType": "cli-tool",
+  "projectName": "AI YouTube Shorts Generator",
+  "projectDescription": "AI-powered tool to automatically generate engaging YouTube Shorts from long-form videos using GPT-4 and Whisper.",
+  "theme": "aspen",
+  "primaryColor": "#87c7df",
+  "lightColor": "#554c95",
+  "darkColor": "#f0f1f6",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "User Guides",
+            "pages": [
+              "guides/usage",
+              "guides/configuration",
+              "guides/batch-processing",
+              "guides/docker"
+            ]
+          },
+          {
+            "group": "Features",
+            "pages": [
+              "features/ai-highlight-selection",
+              "features/smart-cropping",
+              "features/subtitles",
+              "features/transcription"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/customization",
+              "advanced/troubleshooting",
+              "advanced/cpu-installation"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Components",
+            "pages": [
+              "api/youtube-downloader",
+              "api/transcription",
+              "api/language-tasks",
+              "api/face-crop",
+              "api/subtitles",
+              "api/edit"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "GPU-accelerated Whisper transcription for fast speech-to-text",
+    "GPT-4o-mini AI highlight selection for engaging segments",
+    "Smart face-centered and motion-tracked video cropping",
+    "Auto-generated stylized subtitles with Franklin Gothic font",
+    "Vertical 9:16 format for TikTok/YouTube Shorts/Reels",
+    "Interactive approval workflow with auto-approve timeout",
+    "Concurrent execution with unique session IDs",
+    "Support for both YouTube URLs and local video files"
+  ],
+  "publicApiSurface": [
+    "main.py - Main CLI entry point",
+    "Components.YoutubeDownloader.download_youtube_video(url)",
+    "Components.Edit.extractAudio(video_path, audio_file)",
+    "Components.Edit.crop_video(video_path, output, start, end)",
+    "Components.Transcription.transcribeAudio(audio_path)",
+    "Components.LanguageTasks.GetHighlight(transcription)",
+    "Components.FaceCrop.crop_to_vertical(input_video, output_video)",
+    "Components.FaceCrop.combine_videos(video_with_audio, video_without_audio, output)",
+    "Components.Subtitles.add_subtitles_to_video(input_video, output_video, transcriptions, video_start_time)"
+  ]
+}
